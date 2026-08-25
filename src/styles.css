@@ -1,0 +1,102 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+
+  --color-navy-950: #0a0e1f;
+  --color-navy-900: #10152e;
+  --color-navy-850: #141b38;
+  --color-navy-800: #192242;
+  --color-navy-750: #1d2750;
+  --color-navy-700: #253059;
+  --color-navy-600: #313d70;
+
+  --color-brand-50: #eef0ff;
+  --color-brand-100: #e0e3ff;
+  --color-brand-200: #c6cbff;
+  --color-brand-300: #a3a8fc;
+  --color-brand-400: #8183f8;
+  --color-brand-500: #6a63f0;
+  --color-brand-600: #5b48e0;
+  --color-brand-700: #4c3ac2;
+
+  --shadow-card: 0 1px 2px rgba(16, 21, 46, 0.06), 0 1px 3px rgba(16, 21, 46, 0.08);
+  --shadow-pop: 0 10px 30px rgba(10, 14, 31, 0.18), 0 2px 8px rgba(10, 14, 31, 0.1);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  @apply bg-slate-100 text-slate-800 antialiased;
+  font-feature-settings: "tnum" 1;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.35);
+  border-radius: 8px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.55);
+}
+.sidebar-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.anim-pop {
+  animation: pop-in 0.16s ease-out;
+}
+.anim-fade {
+  animation: fade-in 0.15s ease-out;
+}
+.anim-slide {
+  animation: slide-in-right 0.18s ease-out;
+}
+
+.cell-input {
+  @apply w-full rounded-md border border-brand-500 bg-white px-2 py-1 text-right text-[13px] font-medium text-slate-900 outline-none ring-2 ring-brand-200;
+}
+
+.row-hover:hover .row-actions {
+  opacity: 1;
+}

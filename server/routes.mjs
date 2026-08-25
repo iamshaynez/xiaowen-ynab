@@ -1,0 +1,517 @@
+import express from "express";
+import {
+  db,
+  uid,
+  nowIso,
+  getSetting,
+  setSetting,
+  createAccount,
+  loadDemoData,
+  isCreditType,
+  todayYmd,
+} from "./db.mjs";
+import {
+  computeBudget,
+  listMonths,
+  accountBalances,
+  ageOfMoney,
+  goalNeed,
+  reportsOverview,
+} from "./engine.mjs";
+import { addMonths, currentMonth } from "./db.mjs";
+
+export const api = express.Router();
+
+const bad = (res, msg) => res.status(400).json({ error: msg });
+
+api.post("/demo", (req, res) => {
+  const n = db.prepare("SELECT COUNT(*) c FROM transactions").get().c;
+  if (n > 0) return bad(res, "data exists");
+  loadDemoData();
+  res.json({ ok: true });
+});
+
+api.get("/bootstrap", (req, res) => {
+  res.json({
+    settings: {
+      currencySymbol: getSetting("currency_symbol", "¥"),
+      language: getSetting("language", "zh"),
+    },
+    accounts: accountsWithBalances(),
+    payees: db
+      .prepare(
+        "SELECT DISTINCT payee_name AS name FROM transactions WHERE payee_name IS NOT NULL AND payee_name != '' AND payee_name != '__starting__' ORDER BY name LIMIT 500"
+      )
+      .all()
+      .map((r) => r.name),
+    groups: groupsWithCategories(),
+    currentMonth: currentMonth(),
+  });
+});
+
+api.get("/settings", (req, res) => {
+  res.json({ currencySymbol: getSetting("currency_symbol", "¥"), language: getSetting("language", "zh") });
+});
+
+api.put("/settings", (req, res) => {
+  const { currencySymbol, language } = req.body || {};
+  if (typeof currencySymbol === "string" && currencySymbol.length <= 4) setSetting("currency_symbol", currencySymbol);
+  if (language === "zh" || language === "en") setSetting("language", language);
+  res.json({ ok: true });
+});
+
+function accountsWithBalances() {
+  const balances = accountBalances();
+  return db
+    .prepare("SELECT * FROM accounts ORDER BY sort_order, created_at")
+    .all()
+    .map((a) => ({ ...a, balance: balances.get(a.id) || 0 }));
+}
+
+function groupsWithCategories() {
+  const groups = db.prepare("SELECT * FROM category_groups ORDER BY sort_order").all();
+  const cats = db.prepare("SELECT * FROM categories ORDER BY sort_order").all();
+  const goals = Object.fromEntries(db.prepare("SELECT * FROM goals").all().map((g) => [g.category_id, g]));
+  return groups.map((g) => ({
+    ...g,
+    categories: cats.filter((c) => c.group_id === g.id).map((c) => ({ ...c, goal: goals[c.id] || null })),
+  }));
+}
+
+function budgetPayload(month) {
+  const { months, byMonth } = computeBudget(month);
+  const state = byMonth.get(month) || byMonth.get(months[months.length - 1]);
+  if (!state) return null;
+  const goals = Object.fromEntries(db.prepare("SELECT * FROM goals").all().map((g) => [g.category_id, g]));
+
+  let overspentTotal = 0;
+  for (const id in state.available) if (state.available[id] < 0) overspentTotal += state.available[id];
+
+  const lastAssignments =
+    byMonth.get(addMonths(month, -1))?.assigned ||
+    {};
+  const avgSpendByCat = {};
+  const prev3 = [1, 2, 3].map((i) => byMonth.get(addMonths(month, -i))).filter(Boolean);
+  for (const id in state.activity) {
+    const vals = prev3.map((s) => Math.abs(s.activity[id] || 0)).filter((v) => v > 0);
+    avgSpendByCat[id] = vals.length ? Math.ceil(vals.reduce((a, b) => a + b, 0) / vals.length) : 0;
+  }
+
+  const catView = (id, extra = {}) => ({
+    id,
+    assigned: state.assigned[id] || 0,
+    activity: state.activity[id] || 0,
+    available: state.available[id] ?? 0,
+    goal: goals[id] || null,
+    need: goalNeed(goals[id], state.available[id] ?? 0, month, lastAssignments[id] || 0, avgSpendByCat[id] || 0),
+    lastAssigned: lastAssignments[id] || 0,
+    avgSpend: avgSpendByCat[id] || 0,
+    ...extra,
+  });
+
+  const groups = groupsWithCategories()
+    .filter((g) => !g.hidden)
+    .map((g) => ({
+      id: g.id,
+      name: g.name,
+      virtual: false,
+      categories: g.categories.filter((c) => !c.hidden).map((c) => catView(c.id, { name: c.name })),
+    }));
+
+  const ccAccounts = db
+    .prepare("SELECT id,name,type FROM accounts WHERE type IN ('creditCard','lineOfCredit') AND on_budget=1 AND closed=0 ORDER BY sort_order")
+    .all();
+  if (ccAccounts.length) {
+    groups.push({
+      id: "__cc__",
+      name: "__cc__",
+      virtual: true,
+      categories: ccAccounts.map((a) => catView(`cc:${a.id}`, { name: a.name, accountId: a.id })),
+    });
+  }
+
+  const uncategorizedCount = db
+    .prepare(
+      `SELECT COUNT(*) c FROM transactions t JOIN accounts a ON a.id=t.account_id
+       WHERE a.on_budget=1 AND t.category_id IS NULL AND t.transfer_account_id IS NULL
+         AND t.is_start=0 AND substr(t.date,1,7)<=?`
+    )
+    .get(month).c;
+
+  return {
+    month,
+    months,
+    maxMonth: addMonths(currentMonth(), 12),
+    readyToAssign: state.readyToAssign,
+    incomeThisMonth: state.inflow,
+    assignedTotal: state.assignedTotal,
+    overspentTotal,
+    uncategorizedCount,
+    groups,
+    ageOfMoney: ageOfMoney(),
+  };
+}
+
+api.get("/budget/:month", (req, res) => {
+  const p = budgetPayload(req.params.month);
+  if (!p) return bad(res, "bad month");
+  res.json(p);
+});
+
+api.put("/budget/:month/category/:categoryId/assign", (req, res) => {
+  const { month, categoryId } = req.params;
+  const cents = Math.round(Number(req.body?.assigned));
+  if (!Number.isFinite(cents) || cents < 0) return bad(res, "invalid amount");
+  upsertAssignment(month, categoryId, cents);
+  res.json(budgetPayload(month));
+});
+
+function upsertAssignment(month, categoryId, cents) {
+  db.prepare(
+    "INSERT INTO assignments(month,category_id,assigned) VALUES(?,?,?) ON CONFLICT(month,category_id) DO UPDATE SET assigned=excluded.assigned"
+  ).run(month, categoryId, cents);
+}
+
+function adjustAssignment(month, categoryId, delta) {
+  if (!categoryId.startsWith("cc:") && !db.prepare("SELECT 1 FROM categories WHERE id=?").get(categoryId)) {
+    throw new Error("category not found");
+  }
+  const row = db.prepare("SELECT assigned FROM assignments WHERE month=? AND category_id=?").get(month, categoryId);
+  const cur = row?.assigned || 0;
+  upsertAssignment(month, categoryId, cur + delta);
+}
+
+api.post("/budget/:month/move", (req, res) => {
+  const { month } = req.params;
+  const { fromId, toId, amount } = req.body || {};
+  const cents = Math.round(Number(amount));
+  if (!fromId || !toId || fromId === toId) return bad(res, "select different categories");
+  if (!Number.isFinite(cents) || cents <= 0) return bad(res, "invalid amount");
+  try {
+    adjustAssignment(month, fromId, -cents);
+    adjustAssignment(month, toId, cents);
+  } catch (e) {
+    return bad(res, e.message);
+  }
+  res.json(budgetPayload(month));
+});
+
+api.post("/budget/:month/cover", (req, res) => {
+  const { month } = req.params;
+  const { categoryId, fromId } = req.body || {};
+  const p = budgetPayload(month);
+  const overspent = -(p.groups.flatMap((g) => g.categories).find((c) => c.id === categoryId)?.available || 0);
+  if (overspent <= 0) return bad(res, "no overspending to cover");
+  let amount = overspent;
+  if (fromId !== "rta") {
+    const donor = p.groups.flatMap((g) => g.categories).find((c) => c.id === fromId);
+    if (!donor) return bad(res, "donor not found");
+    amount = Math.min(overspent, Math.max(donor.available, 0));
+    if (amount <= 0) return bad(res, "donor has no available funds");
+    try {
+      adjustAssignment(month, fromId, -amount);
+    } catch (e) {
+      return bad(res, e.message);
+    }
+  }
+  adjustAssignment(month, categoryId, amount);
+  res.json(budgetPayload(month));
+});
+
+api.post("/budget/:month/auto-assign", (req, res) => {
+  const { month } = req.params;
+  const p = budgetPayload(month);
+  let rta = p.readyToAssign;
+
+  const flat = p.groups.flatMap((g) => g.categories.map((c) => ({ ...c, groupId: g.id })));
+  const ccCats = flat.filter((c) => c.available < 0 && c.id.startsWith("cc:"));
+  for (const c of ccCats) {
+    if (rta <= 0) break;
+    const amt = Math.min(-c.available, rta);
+    adjustAssignment(month, c.id, amt);
+    rta -= amt;
+  }
+  const withGoals = flat.filter((c) => !c.id.startsWith("cc:") && c.goal && c.need && c.need.need > 0);
+  for (const c of withGoals) {
+    if (rta <= 0) break;
+    const amt = Math.min(c.need.need, rta);
+    adjustAssignment(month, c.id, amt);
+    rta -= amt;
+  }
+  res.json(budgetPayload(month));
+});
+
+api.get("/accounts", (req, res) => {
+  res.json({ accounts: accountsWithBalances() });
+});
+
+api.post("/accounts", (req, res) => {
+  const { name, type, startingBalance, startingDate } = req.body || {};
+  if (!name?.trim()) return bad(res, "name required");
+  if (!type) return bad(res, "type required");
+  const id = createAccount({
+    name: name.trim(),
+    type,
+    startingBalance: Number(startingBalance) || 0,
+    startingDate: startingDate || null,
+  });
+  res.json({ id, accounts: accountsWithBalances() });
+});
+
+api.put("/accounts/:id", (req, res) => {
+  const acc = db.prepare("SELECT * FROM accounts WHERE id=?").get(req.params.id);
+  if (!acc) return bad(res, "not found");
+  const { name, closed } = req.body || {};
+  if (typeof name === "string" && name.trim()) db.prepare("UPDATE accounts SET name=? WHERE id=?").run(name.trim(), acc.id);
+  if (typeof closed === "boolean") {
+    const bal = accountsWithBalances().find((a) => a.id === acc.id)?.balance || 0;
+    if (closed && bal !== 0 && isCreditType(acc.type)) return bad(res, "balance must be zero");
+    db.prepare("UPDATE accounts SET closed=? WHERE id=?").run(closed ? 1 : 0, acc.id);
+  }
+  res.json({ accounts: accountsWithBalances() });
+});
+
+api.delete("/accounts/:id", (req, res) => {
+  const n = db
+    .prepare("SELECT COUNT(*) c FROM transactions WHERE (account_id=? OR transfer_account_id=?) AND is_start=0")
+    .get(req.params.id, req.params.id).c;
+  if (n > 0) return bad(res, "has transactions");
+  db.prepare("DELETE FROM accounts WHERE id=?").run(req.params.id);
+  res.json({ accounts: accountsWithBalances() });
+});
+
+api.get("/accounts/:id/transactions", (req, res) => {
+  const acc = db.prepare("SELECT * FROM accounts WHERE id=?").get(req.params.id);
+  if (!acc) return bad(res, "not found");
+  const rows = db
+    .prepare(
+      `SELECT t.*, c.name AS category_name, o.name AS other_account_name, o.type AS other_account_type
+       FROM transactions t
+       LEFT JOIN categories c ON c.id=t.category_id
+       LEFT JOIN accounts o ON o.id=t.transfer_account_id
+       WHERE t.account_id=? ORDER BY t.date, t.rowid`
+    )
+    .all(req.params.id);
+  let running = acc.starting_balance;
+  const out = [];
+  for (const r of rows) {
+    if (!r.is_start) running += r.amount;
+    out.push({ ...transformTx(r), balance: running });
+  }
+  res.json({ account: { ...acc, balance: running }, transactions: out.reverse() });
+});
+
+function transformTx(r) {
+  return {
+    id: r.id,
+    accountId: r.account_id,
+    date: r.date,
+    payeeName: r.payee_name === "__starting__" ? null : r.payee_name,
+    isStart: !!r.is_start,
+    transferAccountId: r.transfer_account_id,
+    otherAccountName: r.other_account_name,
+    otherAccountType: r.other_account_type,
+    categoryId: r.category_id,
+    categoryName: r.category_name,
+    memo: r.memo,
+    amount: r.amount,
+    cleared: r.cleared,
+    reconciled: r.reconciled,
+  };
+}
+
+api.get("/transactions", (req, res) => {
+  const { search, uncategorized } = req.query;
+  let sql = `SELECT t.*, c.name AS category_name, a.name AS account_name, a.type AS account_type,
+             o.name AS other_account_name, o.type AS other_account_type
+             FROM transactions t
+             LEFT JOIN categories c ON c.id=t.category_id
+             JOIN accounts a ON a.id=t.account_id
+             LEFT JOIN accounts o ON o.id=t.transfer_account_id
+             WHERE t.is_start=0`;
+  const args = [];
+  if (search) {
+    sql += " AND (t.payee_name LIKE ? OR t.memo LIKE ? OR c.name LIKE ?)";
+    const like = `%${search}%`;
+    args.push(like, like, like);
+  }
+  if (uncategorized === "1") sql += " AND t.category_id IS NULL AND t.transfer_account_id IS NULL";
+  sql +=
+    " AND NOT (t.amount > 0 AND t.transfer_account_id IS NOT NULL AND EXISTS(SELECT 1 FROM accounts o2 WHERE o2.id=t.transfer_account_id AND o2.on_budget=1))";
+  sql += " ORDER BY t.date DESC, t.rowid DESC LIMIT 500";
+  const rows = db.prepare(sql).all(...args);
+  res.json({ transactions: rows.map(transformTx) });
+});
+
+api.post("/transactions", (req, res) => {
+  const body = req.body || {};
+  try {
+    createTx(body);
+    res.json({ ok: true });
+  } catch (e) {
+    bad(res, e.message);
+  }
+});
+
+function createTx(body, opts = {}) {
+  const accountId = body.accountId;
+  const date = String(body.date || "").slice(0, 10);
+  if (!accountId || !/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("invalid account or date");
+  const amount = Math.round(Number(body.amount));
+  if (!Number.isFinite(amount) || amount === 0) throw new Error("amount required");
+  const acc = db.prepare("SELECT * FROM accounts WHERE id=?").get(accountId);
+  if (!acc) throw new Error("account not found");
+  const transferAccountId = body.transferAccountId && body.transferAccountId !== accountId ? body.transferAccountId : null;
+  let categoryId = body.categoryId || null;
+  const pairId = opts.keepPair || (transferAccountId ? uid() : null);
+  const cleared = body.cleared ? 1 : 0;
+  const payeeName = (body.payeeName || "").trim();
+
+  if (transferAccountId) {
+    const other = db.prepare("SELECT * FROM accounts WHERE id=?").get(transferAccountId);
+    if (!other) throw new Error("transfer target not found");
+    if (acc.on_budget && other.on_budget) categoryId = null;
+    else if (!acc.on_budget && !other.on_budget) categoryId = null;
+    else if (!acc.on_budget && other.on_budget) {
+      insertLeg({ id: opts.keepId, account: other, amount, date, payeeName, categoryId, memo: body.memo, transferAccountId: acc.id, cleared, pairId });
+      insertLeg({ account: acc, amount: -amount, date, payeeName: "", categoryId: null, memo: body.memo, transferAccountId: other.id, cleared, pairId });
+      return;
+    }
+    insertLeg({ id: opts.keepId, account: acc, amount, date, payeeName, categoryId, memo: body.memo, transferAccountId: other.id, cleared, pairId });
+    insertLeg({ account: other, amount: -amount, date, payeeName: "", categoryId: null, memo: body.memo, transferAccountId: acc.id, cleared, pairId });
+    return;
+  }
+
+  insertLeg({ id: opts.keepId, account: acc, amount, date, payeeName, categoryId, memo: body.memo, transferAccountId: null, cleared, pairId: null });
+}
+
+function insertLeg({ id, account, amount, date, payeeName, categoryId, memo, transferAccountId, cleared, pairId }) {
+  if (categoryId && !db.prepare("SELECT 1 FROM categories WHERE id=?").get(categoryId)) categoryId = null;
+  db.prepare(
+    `INSERT INTO transactions(id,account_id,date,payee_name,transfer_account_id,category_id,memo,amount,cleared,reconciled,is_start,pair_id,created_at)
+     VALUES(?,?,?,?,?,?,?,?,?,0,0,?,?)`
+  ).run(id || uid(), account.id, date, payeeName, transferAccountId, categoryId, memo || "", amount, cleared, pairId, nowIso());
+}
+
+api.put("/transactions/:id", (req, res) => {
+  const existing = db.prepare("SELECT * FROM transactions WHERE id=?").get(req.params.id);
+  if (!existing) return bad(res, "not found");
+  if (existing.is_start) return bad(res, "cannot edit starting balance");
+  const keepId = existing.id;
+  const keepPair = existing.pair_id;
+  const tx = db.transaction(() => {
+    deletePair(existing);
+    createTx({ ...req.body, cleared: req.body.cleared ?? !!existing.cleared }, { keepId, keepPair });
+  });
+  tx();
+  res.json({ ok: true });
+});
+
+function deletePair(t) {
+  db.prepare("DELETE FROM transactions WHERE id=?").run(t.id);
+  if (t.pair_id) db.prepare("DELETE FROM transactions WHERE pair_id=? AND id!=?").run(t.pair_id, t.id);
+}
+
+api.delete("/transactions/:id", (req, res) => {
+  const existing = db.prepare("SELECT * FROM transactions WHERE id=?").get(req.params.id);
+  if (!existing) return bad(res, "not found");
+  if (existing.is_start) return bad(res, "cannot delete starting balance");
+  const tx = db.transaction(() => deletePair(existing));
+  tx();
+  res.json({ ok: true });
+});
+
+api.patch("/transactions/:id/cleared", (req, res) => {
+  const v = Number(req.body?.cleared);
+  if (![0, 1].includes(v)) return bad(res, "invalid value");
+  const existing = db.prepare("SELECT * FROM transactions WHERE id=?").get(req.params.id);
+  if (!existing) return bad(res, "not found");
+  db.prepare("UPDATE transactions SET cleared=?, reconciled=? WHERE id=?").run(v, v === 1 ? 0 : existing.reconciled, existing.id);
+  if (existing.pair_id) {
+    db.prepare("UPDATE transactions SET cleared=?, reconciled=? WHERE pair_id=? AND id!=?").run(v, v === 1 ? 0 : existing.reconciled, existing.pair_id, existing.id);
+  }
+  res.json({ ok: true });
+});
+
+api.post("/reconcile/:accountId", (req, res) => {
+  db.prepare("UPDATE transactions SET reconciled=1, cleared=1 WHERE account_id=? AND cleared=1").run(req.params.accountId);
+  res.json({ ok: true });
+});
+
+api.get("/categories", (req, res) => {
+  res.json({ groups: groupsWithCategories() });
+});
+
+api.post("/category-groups", (req, res) => {
+  const name = (req.body?.name || "").trim();
+  if (!name) return bad(res, "name required");
+  const maxOrder = db.prepare("SELECT COALESCE(MAX(sort_order),-1) m FROM category_groups").get().m;
+  const id = uid();
+  db.prepare("INSERT INTO category_groups(id,name,sort_order) VALUES(?,?,?)").run(id, name, maxOrder + 1);
+  res.json({ id });
+});
+
+api.put("/category-groups/:id", (req, res) => {
+  const g = db.prepare("SELECT * FROM category_groups WHERE id=?").get(req.params.id);
+  if (!g) return bad(res, "not found");
+  const name = (req.body?.name ?? g.name).trim();
+  const hidden = typeof req.body?.hidden === "boolean" ? (req.body.hidden ? 1 : 0) : g.hidden;
+  db.prepare("UPDATE category_groups SET name=?, hidden=? WHERE id=?").run(name || g.name, hidden, g.id);
+  res.json({ ok: true });
+});
+
+api.delete("/category-groups/:id", (req, res) => {
+  const n = db.prepare("SELECT COUNT(*) c FROM categories WHERE group_id=?").get(req.params.id).c;
+  if (n > 0) return bad(res, "group not empty");
+  db.prepare("DELETE FROM category_groups WHERE id=?").run(req.params.id);
+  res.json({ ok: true });
+});
+
+api.post("/categories", (req, res) => {
+  const { groupId, name } = req.body || {};
+  if (!groupId || !(name || "").trim()) return bad(res, "groupId and name required");
+  const g = db.prepare("SELECT * FROM category_groups WHERE id=?").get(groupId);
+  if (!g) return bad(res, "group not found");
+  const maxOrder = db.prepare("SELECT COALESCE(MAX(sort_order),-1) m FROM categories WHERE group_id=?").get(groupId).m;
+  const id = uid();
+  db.prepare("INSERT INTO categories(id,group_id,name,sort_order) VALUES(?,?,?,?)").run(id, groupId, name.trim(), maxOrder + 1);
+  res.json({ id });
+});
+
+api.put("/categories/:id", (req, res) => {
+  const c = db.prepare("SELECT * FROM categories WHERE id=?").get(req.params.id);
+  if (!c) return bad(res, "not found");
+  const name = (req.body?.name ?? c.name).trim();
+  db.prepare("UPDATE categories SET name=? WHERE id=?").run(name || c.name, c.id);
+  res.json({ ok: true });
+});
+
+api.delete("/categories/:id", (req, res) => {
+  const usedTx = db.prepare("SELECT COUNT(*) c FROM transactions WHERE category_id=?").get(req.params.id).c;
+  const usedAs = db.prepare("SELECT COUNT(*) c FROM assignments WHERE category_id=?").get(req.params.id).c;
+  if (usedTx > 0 || usedAs > 0) return bad(res, "in use");
+  db.prepare("DELETE FROM goals WHERE category_id=?").run(req.params.id);
+  db.prepare("DELETE FROM categories WHERE id=?").run(req.params.id);
+  res.json({ ok: true });
+});
+
+api.put("/goals/:categoryId", (req, res) => {
+  const c = db.prepare("SELECT * FROM categories WHERE id=?").get(req.params.categoryId);
+  if (!c) return bad(res, "not found");
+  const { type, target, targetMonth } = req.body || {};
+  if (type == null) {
+    db.prepare("DELETE FROM goals WHERE category_id=?").run(c.id);
+    return res.json({ ok: true });
+  }
+  if (!["monthly", "targetBalance", "targetByDate"].includes(type)) return bad(res, "invalid type");
+  const cents = Math.max(Math.round(Number(target) || 0), 0);
+  db.prepare(
+    "INSERT INTO goals(category_id,type,target,target_month) VALUES(?,?,?,?) ON CONFLICT(category_id) DO UPDATE SET type=excluded.type,target=excluded.target,target_month=excluded.target_month"
+  ).run(c.id, type, cents, type === "targetByDate" ? targetMonth || null : null);
+  res.json({ ok: true });
+});
+
+api.get("/reports/overview", (req, res) => {
+  const n = Math.min(Math.max(Number(req.query.months) || 12, 3), 24);
+  res.json(reportsOverview(n));
+});

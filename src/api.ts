@@ -1,0 +1,85 @@
+import type { Bootstrap, BudgetData, ReportsData, Tx, Account } from "./types";
+
+export class ApiError extends Error {}
+
+async function req<T>(url: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(url, {
+    headers: { "content-type": "application/json" },
+    ...init,
+  });
+  if (!res.ok) {
+    let msg = `${res.status}`;
+    try {
+      const j = await res.json();
+      if (j?.error) msg = j.error;
+    } catch {}
+    throw new ApiError(msg);
+  }
+  return res.json() as Promise<T>;
+}
+
+export const api = {
+  bootstrap: () => req<Bootstrap>("/api/bootstrap"),
+  loadDemo: () => req<{ ok: true }>("/api/demo", { method: "POST" }),
+  saveSettings: (body: { currencySymbol?: string; language?: string }) =>
+    req<{ ok: true }>("/api/settings", { method: "PUT", body: JSON.stringify(body) }),
+
+  budget: (month: string) => req<BudgetData>(`/api/budget/${month}`),
+  assign: (month: string, categoryId: string, cents: number) =>
+    req<BudgetData>(`/api/budget/${month}/category/${categoryId}/assign`, {
+      method: "PUT",
+      body: JSON.stringify({ assigned: cents }),
+    }),
+  moveMoney: (month: string, fromId: string, toId: string, cents: number) =>
+    req<BudgetData>(`/api/budget/${month}/move`, {
+      method: "POST",
+      body: JSON.stringify({ fromId, toId, amount: cents }),
+    }),
+  coverOverspending: (month: string, categoryId: string, fromId: string) =>
+    req<BudgetData>(`/api/budget/${month}/cover`, {
+      method: "POST",
+      body: JSON.stringify({ categoryId, fromId }),
+    }),
+  autoAssign: (month: string) => req<BudgetData>(`/api/budget/${month}/auto-assign`, { method: "POST" }),
+
+  accounts: () => req<{ accounts: Account[] }>("/api/accounts"),
+  createAccount: (body: { name: string; type: string; startingBalance: number; startingDate?: string }) =>
+    req<{ id: string }>("/api/accounts", { method: "POST", body: JSON.stringify(body) }),
+  updateAccount: (id: string, body: { name?: string; closed?: boolean }) =>
+    req<{ accounts: Account[] }>(`/api/accounts/${id}`, { method: "PUT", body: JSON.stringify(body) }),
+  deleteAccount: (id: string) => req<{ accounts: Account[] }>(`/api/accounts/${id}`, { method: "DELETE" }),
+  accountRegister: (id: string) =>
+    req<{ account: Account & { balance: number }; transactions: Tx[] }>(`/api/accounts/${id}/transactions`),
+  reconcile: (accountId: string) => req<{ ok: true }>(`/api/reconcile/${accountId}`, { method: "POST" }),
+
+  transactions: (params: { search?: string; uncategorized?: boolean }) => {
+    const q = new URLSearchParams();
+    if (params.search) q.set("search", params.search);
+    if (params.uncategorized) q.set("uncategorized", "1");
+    const qs = q.toString();
+    return req<{ transactions: Tx[] }>(`/api/transactions${qs ? `?${qs}` : ""}`);
+  },
+  createTx: (body: unknown) => req<{ ok: true }>("/api/transactions", { method: "POST", body: JSON.stringify(body) }),
+  updateTx: (id: string, body: unknown) =>
+    req<{ ok: true }>(`/api/transactions/${id}`, { method: "PUT", body: JSON.stringify(body) }),
+  deleteTx: (id: string) => req<{ ok: true }>(`/api/transactions/${id}`, { method: "DELETE" }),
+  setTxStatus: (id: string, cleared: number) =>
+    req<{ ok: true }>(`/api/transactions/${id}/cleared`, { method: "PATCH", body: JSON.stringify({ cleared }) }),
+
+  addGroup: (name: string) => req<{ id: string }>("/api/category-groups", { method: "POST", body: JSON.stringify({ name }) }),
+  renameGroup: (id: string, name: string) =>
+    req<{ ok: true }>(`/api/category-groups/${id}`, { method: "PUT", body: JSON.stringify({ name }) }),
+  deleteGroup: (id: string) => req<{ ok: true }>(`/api/category-groups/${id}`, { method: "DELETE" }),
+  addCategory: (groupId: string, name: string) =>
+    req<{ id: string }>("/api/categories", { method: "POST", body: JSON.stringify({ groupId, name }) }),
+  renameCategory: (id: string, name: string) =>
+    req<{ ok: true }>(`/api/categories/${id}`, { method: "PUT", body: JSON.stringify({ name }) }),
+  deleteCategory: (id: string) => req<{ ok: true }>(`/api/categories/${id}`, { method: "DELETE" }),
+  setGoal: (
+    categoryId: string,
+    body: { type: "monthly" | "targetBalance" | "targetByDate"; target: number; targetMonth?: string | null }
+  ) => req<{ ok: true }>(`/api/goals/${categoryId}`, { method: "PUT", body: JSON.stringify(body) }),
+  clearGoal: (categoryId: string) => req<{ ok: true }>(`/api/goals/${categoryId}`, { method: "PUT", body: JSON.stringify({ type: null }) }),
+
+  reports: (months = 12) => req<ReportsData>(`/api/reports/overview?months=${months}`),
+};
