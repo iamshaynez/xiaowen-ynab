@@ -100,3 +100,77 @@ body {
 .row-hover:hover .row-actions {
   opacity: 1;
 }
+
+/* ---------------- markdown (chat) ---------------- */
+.md {
+  @apply text-sm leading-relaxed text-slate-700;
+}
+.md > :first-child {
+  margin-top: 0;
+}
+.md > :last-child {
+  margin-bottom: 0;
+}
+.md p {
+  @apply my-2;
+}
+.md h1,
+.md h2,
+.md h3,
+.md h4 {
+  @apply mb-1.5 mt-4 font-bold text-slate-800;
+}
+.md h1 {
+  font-size: 1.15rem;
+}
+.md h2 {
+  font-size: 1.05rem;
+}
+.md h3,
+.md h4 {
+  font-size: 0.95rem;
+}
+.md ul {
+  @apply my-2 list-disc space-y-1 pl-5;
+}
+.md ol {
+  @apply my-2 list-decimal space-y-1 pl-5;
+}
+.md a {
+  @apply font-medium text-brand-600 underline underline-offset-2 hover:text-brand-700;
+}
+.md strong {
+  @apply font-semibold text-slate-800;
+}
+.md blockquote {
+  @apply my-2 border-l-[3px] border-brand-200 bg-brand-50/60 py-1 pl-3 pr-2 text-slate-600;
+}
+.md hr {
+  @apply my-3 border-slate-100;
+}
+.md code {
+  @apply rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[12.5px] text-brand-700;
+}
+.md pre {
+  @apply my-2 overflow-x-auto rounded-xl p-3.5 font-mono text-xs leading-relaxed;
+  background: #10152e;
+  color: #e2e8f0;
+}
+.md pre code {
+  @apply bg-transparent p-0 text-inherit;
+}
+.md table {
+  @apply my-2 w-full border-collapse overflow-hidden rounded-lg text-[13px];
+}
+.md th {
+  @apply border-b-2 border-slate-200 bg-slate-50 px-3 py-1.5 text-left font-semibold text-slate-600;
+}
+.md td {
+  @apply border-b border-slate-100 px-3 py-1.5 align-top;
+}
+.md tr:hover td {
+  @apply bg-slate-50/70;
+}
+.md img {
+  @apply max-w-full rounded-lg;
+}

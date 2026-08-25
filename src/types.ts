@@ -3,6 +3,9 @@ export type Lang = "zh" | "en";
 export interface Settings {
   currencySymbol: string;
   language: Lang;
+  aiBaseUrl: string;
+  aiModel: string;
+  aiKey: string;
 }
 
 export interface Account {
@@ -123,3 +126,31 @@ export interface ReportsData {
   topPayees: { name: string; value: number }[];
   ageOfMoney: number;
 }
+
+export interface ChatSession {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  preview?: string | null;
+}
+
+export interface ChatToolCall {
+  id: string;
+  name: string;
+  arguments: string;
+}
+
+export interface ChatMsg {
+  id: string;
+  role: "user" | "assistant" | "tool";
+  content: string;
+  toolCalls: ChatToolCall[] | null;
+  toolCallId: string | null;
+  pending: { sql: string; purpose: string | null; index: number } | null;
+  proposedSql: string | null;
+  resolved: boolean;
+  createdAt: string;
+}
+
+export type ChatStatus = "idle" | "awaiting_confirmation";

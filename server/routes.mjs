@@ -19,6 +19,18 @@ import {
   reportsOverview,
 } from "./engine.mjs";
 import { addMonths, currentMonth } from "./db.mjs";
+import {
+  listSessions,
+  createSession,
+  deleteSession,
+  renameSession,
+  getSessionMessages,
+  getSessionRow,
+  runAgent,
+  confirmPending,
+  testAiConnection,
+  appendUserMessage,
+} from "./ai.mjs";
 
 export const api = express.Router();
 
@@ -36,6 +48,9 @@ api.get("/bootstrap", (req, res) => {
     settings: {
       currencySymbol: getSetting("currency_symbol", "¥"),
       language: getSetting("language", "zh"),
+      aiBaseUrl: getSetting("ai_base_url", "https://api.openai.com/v1"),
+      aiModel: getSetting("ai_model", "gpt-4o-mini"),
+      aiKey: getSetting("ai_key", ""),
     },
     accounts: accountsWithBalances(),
     payees: db
@@ -50,14 +65,104 @@ api.get("/bootstrap", (req, res) => {
 });
 
 api.get("/settings", (req, res) => {
-  res.json({ currencySymbol: getSetting("currency_symbol", "¥"), language: getSetting("language", "zh") });
+  res.json({
+    currencySymbol: getSetting("currency_symbol", "¥"),
+    language: getSetting("language", "zh"),
+    aiBaseUrl: getSetting("ai_base_url", "https://api.openai.com/v1"),
+    aiModel: getSetting("ai_model", "gpt-4o-mini"),
+    aiKey: getSetting("ai_key", ""),
+  });
 });
 
 api.put("/settings", (req, res) => {
-  const { currencySymbol, language } = req.body || {};
+  const { currencySymbol, language, aiBaseUrl, aiModel, aiKey } = req.body || {};
   if (typeof currencySymbol === "string" && currencySymbol.length <= 4) setSetting("currency_symbol", currencySymbol);
   if (language === "zh" || language === "en") setSetting("language", language);
+  if (typeof aiBaseUrl === "string" && aiBaseUrl.trim()) setSetting("ai_base_url", aiBaseUrl.trim());
+  if (typeof aiModel === "string" && aiModel.trim()) setSetting("ai_model", aiModel.trim());
+  if (typeof aiKey === "string") setSetting("ai_key", aiKey.trim());
   res.json({ ok: true });
+});
+
+api.post("/ai/test", async (req, res) => {
+  try {
+    res.json(await testAiConnection());
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+function chatStatus(sessionId) {
+  const pending = db
+    .prepare(
+      "SELECT id FROM chat_messages WHERE session_id=? AND resolved=0 AND pending_sql IS NOT NULL LIMIT 1"
+    )
+    .get(sessionId);
+  return pending ? "awaiting_confirmation" : "idle";
+}
+
+api.get("/chat/sessions", (req, res) => {
+  res.json({ sessions: listSessions() });
+});
+
+api.post("/chat/sessions", (req, res) => {
+  const title = (req.body?.title || "").trim() || (req.body?.untitled || "新会话");
+  res.json({ session: createSession(title.slice(0, 60)) });
+});
+
+api.patch("/chat/sessions/:id", (req, res) => {
+  const title = (req.body?.title || "").trim();
+  if (!title) return bad(res, "title required");
+  renameSession(req.params.id, title.slice(0, 60));
+  res.json({ ok: true });
+});
+
+api.delete("/chat/sessions/:id", (req, res) => {
+  deleteSession(req.params.id);
+  res.json({ ok: true });
+});
+
+api.get("/chat/sessions/:id", (req, res) => {
+  const s = getSessionRow(req.params.id);
+  if (!s) return bad(res, "not found");
+  res.json({ session: s, messages: getSessionMessages(s.id), status: chatStatus(s.id) });
+});
+
+api.post("/chat/sessions/:id/messages", async (req, res) => {
+  const s = getSessionRow(req.params.id);
+  if (!s) return bad(res, "session not found");
+  const content = (req.body?.content || "").trim();
+  if (!content) return bad(res, "empty message");
+
+  appendUserMessage(s.id, content.slice(0, 8000));
+
+  try {
+    const result = await runAgent(s.id);
+    res.json({ messages: getSessionMessages(s.id), status: chatStatus(s.id), ...result });
+  } catch (e) {
+    const notConfigured = e.message === "AI_NOT_CONFIGURED";
+    res.status(notConfigured ? 400 : 502).json({
+      error: notConfigured ? "AI_NOT_CONFIGURED" : e.message,
+      messages: getSessionMessages(s.id),
+      status: chatStatus(s.id),
+    });
+  }
+});
+
+api.post("/chat/sessions/:id/confirm", async (req, res) => {
+  const s = getSessionRow(req.params.id);
+  if (!s) return bad(res, "session not found");
+  const approve = !!req.body?.approve;
+  try {
+    await confirmPending(s.id, approve);
+    res.json({ messages: getSessionMessages(s.id), status: chatStatus(s.id) });
+  } catch (e) {
+    res.status(502).json({
+      error: e.message,
+      messages: getSessionMessages(s.id),
+      status: chatStatus(s.id),
+    });
+  }
 });
 
 function accountsWithBalances() {

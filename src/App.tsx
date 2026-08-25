@@ -5,6 +5,7 @@ import { BudgetPage } from "./pages/BudgetPage";
 import { AccountsPage } from "./pages/AccountsPage";
 import { AccountDetailPage } from "./pages/AccountDetailPage";
 import { ReportsPage } from "./pages/ReportsPage";
+import { ChatPage } from "./pages/ChatPage";
 import { Spinner } from "./components/ui";
 
 function useHashRoute(): string {
@@ -27,6 +28,7 @@ function Shell() {
   if (detail) page = <AccountDetailPage id={detail[1]} />;
   else if (route.startsWith("#/accounts")) page = <AccountsPage />;
   else if (route.startsWith("#/reports")) page = <ReportsPage />;
+  else if (route.startsWith("#/chat")) page = <ChatPage />;
   else page = <BudgetPage />;
 
   return (

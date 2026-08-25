@@ -1,4 +1,4 @@
-import type { Bootstrap, BudgetData, ReportsData, Tx, Account } from "./types";
+import type { Bootstrap, BudgetData, ReportsData, Tx, Account, ChatSession, ChatMsg, ChatStatus } from "./types";
 
 export class ApiError extends Error {}
 
@@ -21,8 +21,28 @@ async function req<T>(url: string, init?: RequestInit): Promise<T> {
 export const api = {
   bootstrap: () => req<Bootstrap>("/api/bootstrap"),
   loadDemo: () => req<{ ok: true }>("/api/demo", { method: "POST" }),
-  saveSettings: (body: { currencySymbol?: string; language?: string }) =>
+  saveSettings: (body: { currencySymbol?: string; language?: string; aiBaseUrl?: string; aiModel?: string; aiKey?: string }) =>
     req<{ ok: true }>("/api/settings", { method: "PUT", body: JSON.stringify(body) }),
+  aiTest: () => req<{ ok: true; model?: string }>("/api/ai/test", { method: "POST" }),
+
+  chatSessions: () => req<{ sessions: ChatSession[] }>("/api/chat/sessions"),
+  createChatSession: (title?: string) =>
+    req<{ session: ChatSession }>("/api/chat/sessions", { method: "POST", body: JSON.stringify({ title, untitled: "新会话" }) }),
+  renameChatSession: (id: string, title: string) =>
+    req<{ ok: true }>(`/api/chat/sessions/${id}`, { method: "PATCH", body: JSON.stringify({ title }) }),
+  deleteChatSession: (id: string) => req<{ ok: true }>(`/api/chat/sessions/${id}`, { method: "DELETE" }),
+  chatSession: (id: string) =>
+    req<{ session: ChatSession; messages: ChatMsg[]; status: ChatStatus }>(`/api/chat/sessions/${id}`),
+  sendChatMessage: (id: string, content: string) =>
+    req<{ messages: ChatMsg[]; status: ChatStatus }>(`/api/chat/sessions/${id}/messages`, {
+      method: "POST",
+      body: JSON.stringify({ content }),
+    }),
+  confirmChat: (id: string, approve: boolean) =>
+    req<{ messages: ChatMsg[]; status: ChatStatus }>(`/api/chat/sessions/${id}/confirm`, {
+      method: "POST",
+      body: JSON.stringify({ approve }),
+    }),
 
   budget: (month: string) => req<BudgetData>(`/api/budget/${month}`),
   assign: (month: string, categoryId: string, cents: number) =>

@@ -74,6 +74,26 @@ CREATE TABLE IF NOT EXISTS transactions (
 CREATE INDEX IF NOT EXISTS idx_tx_account_date ON transactions(account_id, date);
 CREATE INDEX IF NOT EXISTS idx_tx_category ON transactions(category_id);
 CREATE INDEX IF NOT EXISTS idx_tx_date ON transactions(date);
+CREATE TABLE IF NOT EXISTS chat_sessions (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS chat_messages (
+  id TEXT PRIMARY KEY,
+  session_id TEXT NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
+  role TEXT NOT NULL,
+  content TEXT,
+  tool_calls TEXT,
+  tool_call_id TEXT,
+  pending_sql TEXT,
+  pending_purpose TEXT,
+  pending_index INTEGER,
+  resolved INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_chat_msg_session ON chat_messages(session_id, created_at);
 `);
 
 export function getSetting(key, fallback = null) {
@@ -90,6 +110,9 @@ export function setSetting(key, value) {
 if (!getSetting("initialized")) {
   setSetting("currency_symbol", "¥");
   setSetting("language", "zh");
+  setSetting("ai_base_url", "https://api.openai.com/v1");
+  setSetting("ai_model", "gpt-4o-mini");
+  setSetting("ai_key", "");
   seedDefaultCategories();
   setSetting("initialized", "1");
 }

@@ -7,6 +7,7 @@ import {
   Package,
   PiggyBank,
   Scale,
+  Sparkles,
   TrendingUp,
   Wallet,
 } from "lucide-react";
@@ -140,6 +141,7 @@ export function Sidebar({ route }: { route: string }) {
           { href: "#/budget", icon: Wallet, label: t("nav_budget"), active: route.startsWith("#/budget") },
           { href: "#/accounts", icon: Landmark, label: t("nav_accounts"), active: route.startsWith("#/accounts") },
           { href: "#/reports", icon: TrendingUp, label: t("nav_reports"), active: route.startsWith("#/reports") },
+          { href: "#/chat", icon: Sparkles, label: t("nav_chat"), active: route.startsWith("#/chat") },
         ].map(({ href, icon: Icon, label, active }) => (
           <a
             key={href}
