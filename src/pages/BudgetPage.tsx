@@ -806,6 +806,13 @@ function Inspector({
   const [custom, setCustom] = useState("");
 
   const cat = sel.kind === "cat" ? sel.cat : null;
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
   const assign = async (cents: number) => {
     if (!cat) return;
     onApply(await api.assign(data.month, cat.id, cents));
@@ -824,136 +831,149 @@ function Inspector({
   useEffect(() => setGf(goalForm), [goalForm]);
 
   return (
-    <aside key={cat?.id ?? "rta"} className="anim-slide sticky top-0 hidden h-full w-[320px] shrink-0 overflow-y-auto border-l border-slate-200 bg-white p-5 lg:block">
-      {sel.kind === "rta" ? (
-        <>
-          <SectionTitle icon={<Coins size={15} />} title={t("inspector_readyToAssign")} onClose={onClose} />
-          <div className={`num mt-3 text-3xl font-bold ${data.readyToAssign < 0 ? "text-rose-600" : "text-brand-600"}`}>
-            {fmtMoney(data.readyToAssign)}
-          </div>
-          <p className="mt-2 text-xs leading-relaxed text-slate-400">
-            {lang === "zh"
-              ? "这是尚未分配任何任务的钱。YNAB 第一法则：给每一块钱一个任务，把它分配到下面的分类里。"
-              : "This is money with no job yet. Rule one: give every dollar a job by assigning it below."}
-          </p>
-          <Btn variant="primary" className="mt-4 w-full" onClick={() => api.autoAssign(data.month).then(onApply)}>
-            <Sparkles size={14} /> {t("budget_autoAssign")}
-          </Btn>
-          <Btn className="mt-2 w-full" onClick={onMove}>
-            <ArrowRightLeft size={14} /> {t("inspector_moveBtn")}
-          </Btn>
-        </>
-      ) : cat ? (
-        <>
-          <SectionTitle
-            icon={<Target size={15} />}
-            title={cat.name ?? ""}
-            onClose={onClose}
-            actions={
-              <>
-                <button className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600" onClick={() => cat.name && onRename(cat.id, cat.name)}>
-                  <Pencil size={13} />
-                </button>
-                <button className="rounded-md p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600" onClick={() => onDeleteCat(cat.id)}>
-                  <Trash2 size={13} />
-                </button>
-              </>
-            }
-          />
-
-          <div className={`mt-3 rounded-xl p-3 ${cat.available < 0 ? "bg-rose-50" : "bg-slate-50"}`}>
-            <div className="text-[11px] font-medium uppercase tracking-wide text-slate-400">{t("inspector_available")}</div>
-            <div className={`num mt-0.5 text-3xl font-bold ${cat.available < 0 ? "text-rose-600" : "text-slate-800"}`}>
-              {fmtMoney(cat.available)}
+    <>
+      <div
+        key={`bd-${cat?.id ?? "rta"}`}
+        aria-hidden="true"
+        onClick={onClose}
+        className="anim-fade fixed inset-0 z-30 bg-navy-950/25 min-[1680px]:hidden"
+      />
+      <aside
+        key={cat?.id ?? "rta"}
+        role="dialog"
+        aria-label={sel.kind === "cat" ? (cat?.name ?? "") : t("inspector_readyToAssign")}
+        className="anim-slide fixed inset-y-0 right-0 z-40 h-full w-[320px] max-w-[85vw] shrink-0 overflow-y-auto border-l border-slate-200 bg-white p-5 shadow-pop min-[1680px]:static min-[1680px]:z-auto min-[1680px]:max-w-none min-[1680px]:shadow-none"
+      >
+        {sel.kind === "rta" ? (
+          <>
+            <SectionTitle icon={<Coins size={15} />} title={t("inspector_readyToAssign")} onClose={onClose} />
+            <div className={`num mt-3 text-3xl font-bold ${data.readyToAssign < 0 ? "text-rose-600" : "text-brand-600"}`}>
+              {fmtMoney(data.readyToAssign)}
             </div>
-            <div className="mt-1 text-[11px] text-slate-400">{t("inspector_leftover")}</div>
-            <div className="mt-2 grid grid-cols-2 gap-2 text-[13px]">
-              <div>
-                <span className="text-slate-400">{t("inspector_assigned")}: </span>
-                <b className="num text-slate-600">{fmtMoney(cat.assigned)}</b>
-              </div>
-              <div>
-                <span className="text-slate-400">{t("inspector_activity")}: </span>
-                <b className={`num ${cat.activity > 0 ? "text-emerald-600" : "text-slate-600"}`}>{fmtMoney(cat.activity)}</b>
-              </div>
-            </div>
-          </div>
-
-          {cat.available < 0 && (
-            <Btn variant="danger" className="mt-3 w-full" onClick={onCover}>
-              <AlertTriangle size={14} /> {t("budget_cover")} ({fmtMoney(Math.abs(cat.available))})
+            <p className="mt-2 text-xs leading-relaxed text-slate-400">
+              {lang === "zh"
+                ? "这是尚未分配任何任务的钱。YNAB 第一法则：给每一块钱一个任务，把它分配到下面的分类里。"
+                : "This is money with no job yet. Rule one: give every dollar a job by assigning it below."}
+            </p>
+            <Btn variant="primary" className="mt-4 w-full" onClick={() => api.autoAssign(data.month).then(onApply)}>
+              <Sparkles size={14} /> {t("budget_autoAssign")}
             </Btn>
-          )}
-          <Btn className="mt-2 w-full" onClick={onMove}>
-            <ArrowRightLeft size={14} /> {t("inspector_moveBtn")}
-          </Btn>
+            <Btn className="mt-2 w-full" onClick={onMove}>
+              <ArrowRightLeft size={14} /> {t("inspector_moveBtn")}
+            </Btn>
+          </>
+        ) : cat ? (
+          <>
+            <SectionTitle
+              icon={<Target size={15} />}
+              title={cat.name ?? ""}
+              onClose={onClose}
+              actions={
+                <>
+                  <button className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600" onClick={() => cat.name && onRename(cat.id, cat.name)}>
+                    <Pencil size={13} />
+                  </button>
+                  <button className="rounded-md p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600" onClick={() => onDeleteCat(cat.id)}>
+                    <Trash2 size={13} />
+                  </button>
+                </>
+              }
+            />
 
-          <div className="mt-5">
-            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">{t("inspector_quickAssign")}</div>
-            <div className="space-y-1.5">
-              {cat.need != null && cat.need.need > 0 && (
-                <QuickBtn label={t("inspector_needTarget", { amt: fmtMoney(cat.need.need) })} onClick={() => assign(cat.need!.need)} />
-              )}
-              <QuickBtn label={t("inspector_lastMonth", { amt: fmtMoney(cat.lastAssigned) })} onClick={() => assign(cat.lastAssigned)} />
-              {cat.avgSpend > 0 && (
-                <QuickBtn label={t("inspector_avgSpend", { amt: fmtMoney(cat.avgSpend) })} onClick={() => assign(cat.avgSpend)} />
-              )}
-              <div className="flex gap-1.5 pt-1">
-                <input
-                  className={inputCls + " num"}
-                  placeholder={t("inspector_custom")}
-                  value={custom}
-                  onChange={(e) => setCustom(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
+            <div className={`mt-3 rounded-xl p-3 ${cat.available < 0 ? "bg-rose-50" : "bg-slate-50"}`}>
+              <div className="text-[11px] font-medium uppercase tracking-wide text-slate-400">{t("inspector_available")}</div>
+              <div className={`num mt-0.5 text-3xl font-bold ${cat.available < 0 ? "text-rose-600" : "text-slate-800"}`}>
+                {fmtMoney(cat.available)}
+              </div>
+              <div className="mt-1 text-[11px] text-slate-400">{t("inspector_leftover")}</div>
+              <div className="mt-2 grid grid-cols-2 gap-2 text-[13px]">
+                <div>
+                  <span className="text-slate-400">{t("inspector_assigned")}: </span>
+                  <b className="num text-slate-600">{fmtMoney(cat.assigned)}</b>
+                </div>
+                <div>
+                  <span className="text-slate-400">{t("inspector_activity")}: </span>
+                  <b className={`num ${cat.activity > 0 ? "text-emerald-600" : "text-slate-600"}`}>{fmtMoney(cat.activity)}</b>
+                </div>
+              </div>
+            </div>
+
+            {cat.available < 0 && (
+              <Btn variant="danger" className="mt-3 w-full" onClick={onCover}>
+                <AlertTriangle size={14} /> {t("budget_cover")} ({fmtMoney(Math.abs(cat.available))})
+              </Btn>
+            )}
+            <Btn className="mt-2 w-full" onClick={onMove}>
+              <ArrowRightLeft size={14} /> {t("inspector_moveBtn")}
+            </Btn>
+
+            <div className="mt-5">
+              <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">{t("inspector_quickAssign")}</div>
+              <div className="space-y-1.5">
+                {cat.need != null && cat.need.need > 0 && (
+                  <QuickBtn label={t("inspector_needTarget", { amt: fmtMoney(cat.need.need) })} onClick={() => assign(cat.need!.need)} />
+                )}
+                <QuickBtn label={t("inspector_lastMonth", { amt: fmtMoney(cat.lastAssigned) })} onClick={() => assign(cat.lastAssigned)} />
+                {cat.avgSpend > 0 && (
+                  <QuickBtn label={t("inspector_avgSpend", { amt: fmtMoney(cat.avgSpend) })} onClick={() => assign(cat.avgSpend)} />
+                )}
+                <div className="flex gap-1.5 pt-1">
+                  <input
+                    className={inputCls + " num"}
+                    placeholder={t("inspector_custom")}
+                    value={custom}
+                    onChange={(e) => setCustom(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        const cents = parseAmountToCents(custom);
+                        if (cents != null && cents >= 0) assign(cents).then(() => setCustom(""));
+                      }
+                    }}
+                  />
+                  <Btn
+                    variant="primary"
+                    onClick={() => {
                       const cents = parseAmountToCents(custom);
                       if (cents != null && cents >= 0) assign(cents).then(() => setCustom(""));
-                    }
-                  }}
-                />
-                <Btn
-                  variant="primary"
-                  onClick={() => {
-                    const cents = parseAmountToCents(custom);
-                    if (cents != null && cents >= 0) assign(cents).then(() => setCustom(""));
-                  }}
-                >
-                  ✓
-                </Btn>
+                    }}
+                  >
+                    ✓
+                  </Btn>
+                </div>
               </div>
             </div>
-          </div>
 
-          {!cat.id.startsWith("cc:") && (
-            <div className="mt-5 border-t border-slate-100 pt-4">
-              <GoalEditor
-                cat={cat}
-                gf={gf}
-                setGf={setGf}
-                lang={lang}
-                t={t}
-                onSave={async () => {
-                  if (!gf.type) return;
-                  const cents = parseAmountToCents(gf.target || "0");
-                  if (cents == null) return;
-                  await api.setGoal(cat.id, {
-                    type: gf.type as "monthly" | "targetBalance" | "targetByDate",
-                    target: cents,
-                    targetMonth: gf.date || null,
-                  });
-                  onApply(await api.budget(data.month));
-                  toast("✓");
-                }}
-                onClear={async () => {
-                  await api.clearGoal(cat.id);
-                  onApply(await api.budget(data.month));
-                }}
-              />
-            </div>
-          )}
-        </>
-      ) : null}
-    </aside>
+            {!cat.id.startsWith("cc:") && (
+              <div className="mt-5 border-t border-slate-100 pt-4">
+                <GoalEditor
+                  cat={cat}
+                  gf={gf}
+                  setGf={setGf}
+                  lang={lang}
+                  t={t}
+                  onSave={async () => {
+                    if (!gf.type) return;
+                    const cents = parseAmountToCents(gf.target || "0");
+                    if (cents == null) return;
+                    await api.setGoal(cat.id, {
+                      type: gf.type as "monthly" | "targetBalance" | "targetByDate",
+                      target: cents,
+                      targetMonth: gf.date || null,
+                    });
+                    onApply(await api.budget(data.month));
+                    toast("✓");
+                  }}
+                  onClear={async () => {
+                    await api.clearGoal(cat.id);
+                    onApply(await api.budget(data.month));
+                  }}
+                />
+              </div>
+            )}
+          </>
+        ) : null}
+      </aside>
+    </>
   );
 }
 
