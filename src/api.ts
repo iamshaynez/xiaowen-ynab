@@ -11,13 +11,17 @@ import type {
   ImChannelInput,
   WechatLoginState,
 } from "./types";
+import { getToken } from "./auth";
 
 export class ApiError extends Error {}
 
 async function req<T>(url: string, init?: RequestInit): Promise<T> {
+  const headers: Record<string, string> = { "content-type": "application/json" };
+  const token = getToken();
+  if (token) headers.authorization = `Bearer ${token}`;
   const res = await fetch(url, {
-    headers: { "content-type": "application/json" },
     ...init,
+    headers,
   });
   if (!res.ok) {
     let msg = `${res.status}`;
@@ -31,6 +35,9 @@ async function req<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  authStatus: () => req<{ enabled: boolean }>("/api/auth/status"),
+  login: (password: string) => req<{ token: string }>("/api/auth/login", { method: "POST", body: JSON.stringify({ password }) }),
+
   bootstrap: () => req<Bootstrap>("/api/bootstrap"),
   loadDemo: () => req<{ ok: true }>("/api/demo", { method: "POST" }),
   saveSettings: (body: { currencySymbol?: string; language?: string; aiBaseUrl?: string; aiModel?: string; aiKey?: string }) =>

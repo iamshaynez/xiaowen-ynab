@@ -7,6 +7,7 @@ import { AccountDetailPage } from "./pages/AccountDetailPage";
 import { ReportsPage } from "./pages/ReportsPage";
 import { ChatPage } from "./pages/ChatPage";
 import { SettingsPage } from "./pages/SettingsPage";
+import { LoginPage } from "./pages/LoginPage";
 import { Spinner } from "./components/ui";
 
 function useHashRoute(): string {
@@ -22,7 +23,19 @@ function useHashRoute(): string {
 
 function Shell() {
   const route = useHashRoute();
-  const { loading } = useApp();
+  const { loading, authEnabled, authenticated } = useApp();
+
+  if (loading) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <Spinner />
+      </div>
+    );
+  }
+
+  if (authEnabled && !authenticated) {
+    return <LoginPage />;
+  }
 
   let page;
   const detail = route.match(/^#\/accounts\/([\w-]+)$/);
@@ -36,7 +49,7 @@ function Shell() {
   return (
     <div className="flex h-full">
       <Sidebar route={route} />
-      <main className="ml-60 h-full min-w-0 flex-1 overflow-y-auto">{loading ? <Spinner /> : page}</main>
+      <main className="ml-60 h-full min-w-0 flex-1 overflow-y-auto">{page}</main>
     </div>
   );
 }
