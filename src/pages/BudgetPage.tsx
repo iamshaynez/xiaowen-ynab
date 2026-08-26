@@ -283,7 +283,7 @@ export function BudgetPage() {
             </div>
           )}
           {cur.uncategorizedCount > 0 && (
-            <a href="#/accounts" className="block border-t border-amber-100 bg-amber-50 px-6 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-100">
+            <a href="#/transactions?filter=uncategorized" className="block border-t border-amber-100 bg-amber-50 px-6 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-100">
               <AlertTriangle size={12} className="mr-1 inline" />
               {t("budget_uncategorized", { n: cur.uncategorizedCount })}
               <span className="ml-2 underline">{t("budget_goResolve")} →</span>
