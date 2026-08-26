@@ -7,6 +7,7 @@ import {
   Package,
   PiggyBank,
   Scale,
+  Settings,
   Sparkles,
   TrendingUp,
   Wallet,
@@ -142,6 +143,7 @@ export function Sidebar({ route }: { route: string }) {
           { href: "#/accounts", icon: Landmark, label: t("nav_accounts"), active: route.startsWith("#/accounts") },
           { href: "#/reports", icon: TrendingUp, label: t("nav_reports"), active: route.startsWith("#/reports") },
           { href: "#/chat", icon: Sparkles, label: t("nav_chat"), active: route.startsWith("#/chat") },
+          { href: "#/settings", icon: Settings, label: t("nav_settings"), active: route.startsWith("#/settings") },
         ].map(({ href, icon: Icon, label, active }) => (
           <a
             key={href}

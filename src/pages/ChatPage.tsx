@@ -19,7 +19,7 @@ import {
 import { api } from "../api";
 import { useApp } from "../store";
 import type { ChatMsg, ChatSession } from "../types";
-import { Btn, Modal, Spinner, inputCls } from "../components/ui";
+import { Btn, Spinner } from "../components/ui";
 import { Mermaid } from "../components/Mermaid";
 
 type TFn = ReturnType<typeof useApp>["t"];
@@ -117,12 +117,14 @@ export function ChatPage() {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [confirming, setConfirming] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const [loadingSession, setLoadingSession] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
 
   const configured = !!boot?.settings.aiKey;
+  const openSettings = () => {
+    window.location.hash = "#/settings";
+  };
 
   const loadSessions = useCallback(async () => {
     try {
@@ -169,7 +171,7 @@ export function ChatPage() {
     if (!content || sending) return;
     if (!configured) {
       toast(t("chat_notConfigured"), "err");
-      setSettingsOpen(true);
+      openSettings();
       return;
     }
     let sid = activeId;
@@ -212,6 +214,7 @@ export function ChatPage() {
     try {
       const r = await api.confirmChat(activeId, approve);
       setMessages(r.messages);
+      if (approve && r.changed) await refreshBoot();
     } catch {
       toast(t("chat_errorReply"), "err");
     } finally {
@@ -273,8 +276,8 @@ export function ChatPage() {
             className={`ml-1 h-2 w-2 rounded-full ${configured ? "bg-emerald-400" : "bg-slate-300"}`}
             title={configured ? "OK" : t("chat_notConfigured")}
           />
-          <Btn variant="ghost" className="ml-auto" onClick={() => setSettingsOpen(true)}>
-            <Settings2 size={14} /> {t("chat_settings")}
+          <Btn variant="ghost" className="ml-auto" onClick={openSettings}>
+            <Settings2 size={14} /> {t("nav_settings")}
           </Btn>
         </header>
 
@@ -333,7 +336,7 @@ export function ChatPage() {
           <div className="mx-auto max-w-3xl">
             {!configured && (
               <button
-                onClick={() => setSettingsOpen(true)}
+                onClick={openSettings}
                 className="mb-2 flex w-full items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-left text-xs font-medium text-amber-700 hover:bg-amber-100"
               >
                 <ShieldAlert size={13} /> {t("chat_notConfigured")}
@@ -366,17 +369,6 @@ export function ChatPage() {
           </div>
         </div>
       </section>
-
-      {settingsOpen && (
-        <AiSettingsModal
-          onClose={() => setSettingsOpen(false)}
-          onSaved={async () => {
-            await refreshBoot();
-            setSettingsOpen(false);
-            toast(t("chat_saveOk"));
-          }}
-        />
-      )}
     </div>
   );
 }
@@ -548,59 +540,5 @@ function MessageUnitView({
         </div>
       </div>
     </div>
-  );
-}
-
-/* ------------------------- AI settings modal ------------------------- */
-
-function AiSettingsModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
-  const { boot, t, toast } = useApp();
-  const [baseUrl, setBaseUrl] = useState(boot?.settings.aiBaseUrl ?? "");
-  const [model, setModel] = useState(boot?.settings.aiModel ?? "");
-  const [key, setKey] = useState(boot?.settings.aiKey ?? "");
-  const [testing, setTesting] = useState(false);
-
-  const save = async (thenTest = false): Promise<boolean> => {
-    await api.saveSettings({ aiBaseUrl: baseUrl, aiModel: model, aiKey: key });
-    if (!thenTest) return true;
-    setTesting(true);
-    try {
-      await api.aiTest();
-      toast(t("chat_testOk"));
-      return true;
-    } catch (e) {
-      toast(e instanceof Error ? e.message : t("common_error"), "err");
-      return false;
-    } finally {
-      setTesting(false);
-    }
-  };
-
-  return (
-    <Modal title={t("chat_settings")} onClose={onClose}>
-      <label className="mb-3 block">
-        <span className="mb-1 block text-xs font-medium text-slate-500">{t("chat_baseUrl")}</span>
-        <input className={inputCls} value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="https://api.openai.com/v1" />
-      </label>
-      <label className="mb-3 block">
-        <span className="mb-1 block text-xs font-medium text-slate-500">{t("chat_model")}</span>
-        <input className={inputCls} value={model} onChange={(e) => setModel(e.target.value)} placeholder="gpt-4o-mini" />
-      </label>
-      <label className="mb-4 block">
-        <span className="mb-1 block text-xs font-medium text-slate-500">{t("chat_key")}</span>
-        <input className={inputCls} type="password" autoComplete="off" value={key} onChange={(e) => setKey(e.target.value)} placeholder="sk-…" />
-      </label>
-      <div className="flex gap-2">
-        <Btn variant="primary" className="flex-1" onClick={async () => (await save()) && onSaved()}>
-          <Check size={14} /> {t("common_save")}
-        </Btn>
-        <Btn className="flex-1" disabled={testing} onClick={async () => (await save(true)) && onSaved()}>
-          {testing ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />} {t("chat_testConn")}
-        </Btn>
-      </div>
-      <p className="mt-3 text-[11px] leading-relaxed text-slate-400">
-        OpenAI · DeepSeek · Moonshot · GLM · 本地 Ollama 等任何兼容 /chat/completions 协议的服务均可。密钥仅保存在本地数据库中。
-      </p>
-    </Modal>
   );
 }

@@ -48,7 +48,42 @@ export async function testAiConnection() {
   return { ok: true, model: data.model || getAiConfig().model };
 }
 
-function buildSystemPrompt() {
+/* ------------------------- 动态 Schema 内省 ------------------------- */
+
+// 不向模型展示的表：内部表 + 受保护表（见工作规则）
+const HIDDEN_SCHEMA_TABLES = new Set(["chat_sessions", "chat_messages", "settings", "schema_migrations", "im_channels"]);
+
+function quoteIdent(name) {
+  return `"${String(name).replace(/"/g, '""')}"`;
+}
+
+export function buildSchemaDoc() {
+  const tables = db
+    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
+    .all()
+    .map((r) => r.name)
+    .filter((n) => !HIDDEN_SCHEMA_TABLES.has(n));
+
+  const lines = [];
+  for (const t of tables) {
+    const ident = quoteIdent(t);
+    const fkMap = new Map(db.pragma(`foreign_key_list(${ident})`).map((f) => [f.from, f.table]));
+    const cols = db
+      .pragma(`table_info(${ident})`)
+      .map((c) => {
+        let s = c.type ? `${c.name} ${c.type}` : c.name;
+        if (c.pk) s += " PK";
+        else if (c.notnull) s += " NOT NULL";
+        if (c.dflt_value != null) s += ` DEFAULT ${c.dflt_value}`;
+        if (fkMap.has(c.name)) s += ` FK→${fkMap.get(c.name)}`;
+        return s;
+      });
+    lines.push(`- ${t}(${cols.join(", ")})`);
+  }
+  return lines.join("\n");
+}
+
+export function buildSystemPrompt() {
   const balances = accountBalances();
   const accounts = db
     .prepare("SELECT id,name,type,on_budget,closed FROM accounts ORDER BY sort_order")
@@ -72,26 +107,19 @@ function buildSystemPrompt() {
 3. 灵活应变：预算可以随时通过移动资金调整。
 4. 关注资金账龄（Age of Money）。
 
-# 数据库 Schema（SQLite，金额一律以「分」为单位的整数存储！¥12.34 = 1234）
-- accounts(id PK, name, type, on_budget INT 0/1, closed INT 0/1, starting_balance INT 分, starting_balance_date 'YYYY-MM-DD', sort_order)
-  账户余额 = starting_balance + SUM(transactions.amount WHERE is_start=0)。
-  type ∈ checking/savings/cash/creditCard/lineOfCredit/investment/property/vehicle/otherAsset/studentLoan/personalLoan/otherLiability。
-  现金类(checking/savings/cash)与信用卡默认 on_budget=1；信用卡余额为负代表欠款。
-- transactions(id PK, account_id FK→accounts, date 'YYYY-MM-DD', payee_name, transfer_account_id FK→accounts 可空,
-               category_id FK→categories 可空, memo, amount INT 分 正=流入/负=流出, cleared 0/1, reconciled 0/1,
-               is_start 0/1, pair_id TEXT 可空, created_at)
-  【关键】账户间转账 = 两条腿：源账户 amount 为负、目标账户 amount 为正，两行 transfer_account_id 互指对方、pair_id 相同、备注一致。
-  目标腿 payee_name 为空串。绝不能只插入一条腿。
-  is_start=1 的行是期初余额，禁止修改或删除。
-  预算内账户之间互转(category_id 必须为 NULL)不影响预算；只有带 category_id 的交易才影响分类活动；
-  无分类的正向流入计入 Ready to Assign。
-  信用卡消费：category_id 写实际消费分类（不要写任何 cc: 分类），系统会自动把额度转移到还款科目。
-  向信用卡转账=还款：transfer_account_id 指向该卡、amount 为负（从付款账户看）。
-- category_groups(id PK, name, sort_order, hidden)
-- categories(id PK, group_id FK, name, sort_order, hidden)
-- goals(category_id PK FK, type 'monthly'|'targetBalance'|'targetByDate', target INT 分, target_month 'YYYY-MM-DD' 可空)
-- assignments(month 'YYYY-MM', category_id TEXT, assigned INT 分, PRIMARY KEY(month, category_id))
-  category_id 也可以是合成 id 'cc:<account_uuid>'，表示给某张信用卡的还款科目分配金额。
+# 数据库 Schema（由当前数据库实时内省生成，列标记：PK=主键、NOT NULL=必填、DEFAULT=有默认值可省略、FK→表=外键）
+金额一律以「分」为单位的整数存储！¥12.34 = 1234。
+${buildSchemaDoc()}
+
+# 关键业务语义（固定不变，与上面的实时 Schema 配合理解）
+- 账户余额 = starting_balance + SUM(transactions.amount WHERE is_start=0)；is_start=1 的行是期初余额，禁止修改或删除。
+- 账户间转账 = 两条腿：源账户 amount 为负、目标账户 amount 为正，两行 transfer_account_id 互指对方、pair_id 相同、备注一致。目标腿 payee_name 为空串。绝不能只插入一条腿。
+- 预算内账户之间互转 category_id 必须为 NULL，不影响预算；只有带 category_id 的交易才影响分类活动；无分类的正向流入计入 Ready to Assign。
+- 信用卡消费：category_id 写实际消费分类（不要写任何 cc: 分类），系统会自动把额度转移到还款科目；信用卡余额为负代表欠款。
+- 向信用卡转账=还款：transfer_account_id 指向该卡、amount 为负（从付款账户看）。
+- assignments 的 category_id 也可以是合成 id 'cc:<account_uuid>'，表示给某张信用卡的还款科目分配金额。
+- accounts.type ∈ checking/savings/cash/creditCard/lineOfCredit/investment/property/vehicle/otherAsset/studentLoan/personalLoan/otherLiability；
+  现金类(checking/savings/cash)与信用卡默认 on_budget=1。
 
 # 当前账本快照
 今天：${todayYmd()}；当前月份：${currentMonth()}
@@ -103,7 +131,7 @@ ${groups || "  （暂无分类）"}
 # 工作规则
 1. 你拥有 run_sql 工具直接操作上述数据库。回答任何数据问题前先 SELECT 查询确认事实，不要凭空猜测。
 2. 只允许单条 SQL；SELECT 建议加 LIMIT；写操作只能是 INSERT/UPDATE/DELETE 单条语句。
-3. 禁止触碰的表：chat_sessions、chat_messages、settings。禁止 ATTACH/PRAGMA/VACUUM 等命令。
+3. 禁止触碰的表：chat_sessions、chat_messages、settings、im_channels。禁止 ATTACH/PRAGMA/VACUUM 等命令。
 4. 任何写操作（INSERT/UPDATE/DELETE）系统会强制弹出用户确认，你只需发起，然后根据工具返回结果继续。
 5. 写入后建议 SELECT 验证结果，并向用户报告变更摘要。
 6. 回复使用 Markdown。适合时可用 mermaid 代码块（pie/flowchart/xychart 等）做可视化，例如：
@@ -119,18 +147,16 @@ ${groups || "  （暂无分类）"}
 /* ------------------------- SQL safety ------------------------- */
 
 const FORBIDDEN_SQL = /\b(attach|detach|pragma|vacuum|reindex)\b/i;
-const FORBIDDEN_WRITE_TABLES = /\b(chat_sessions|chat_messages|settings)\b/i;
+const PROTECTED_TABLES = /\b(chat_sessions|chat_messages|settings|im_channels)\b/i;
 
-function classifySql(rawSql) {
+export function classifySql(rawSql) {
   const sql = String(rawSql || "").trim().replace(/;+\s*$/, "");
   if (!sql) return { error: "empty sql" };
   if (/;/.test(sql)) return { error: "only one statement allowed" };
   if (FORBIDDEN_SQL.test(sql)) return { error: "command not allowed" };
+  if (PROTECTED_TABLES.test(sql)) return { error: "this table is protected" };
   if (/^(select|with)\b/i.test(sql)) return { kind: "read", sql };
-  if (/^(insert|update|delete)\b/i.test(sql)) {
-    if (FORBIDDEN_WRITE_TABLES.test(sql)) return { error: "this table is protected" };
-    return { kind: "write", sql };
-  }
+  if (/^(insert|update|delete)\b/i.test(sql)) return { kind: "write", sql };
   return { error: "only SELECT / INSERT / UPDATE / DELETE are supported" };
 }
 
@@ -165,15 +191,22 @@ export function listSessions() {
   return db
     .prepare(
       `SELECT s.*, (SELECT content FROM chat_messages m WHERE m.session_id=s.id AND m.role='user' ORDER BY m.created_at DESC LIMIT 1) AS preview
-       FROM chat_sessions s ORDER BY s.updated_at DESC`
+       FROM chat_sessions s WHERE s.channel='web' ORDER BY s.updated_at DESC`
     )
     .all();
 }
 
-export function createSession(title) {
+export function createSession(title, meta = {}) {
   const id = uid();
   const now = nowIso();
-  db.prepare("INSERT INTO chat_sessions(id,title,created_at,updated_at) VALUES(?,?,?,?)").run(id, title, now, now);
+  db.prepare("INSERT INTO chat_sessions(id,title,channel,external_id,created_at,updated_at) VALUES(?,?,?,?,?,?)").run(
+    id,
+    title,
+    meta.channel || "web",
+    meta.externalId ?? null,
+    now,
+    now
+  );
   return getSessionRow(id);
 }
 
@@ -244,32 +277,62 @@ function addMessage(sessionId, fields) {
   return id;
 }/* ------------------------- History for LLM ------------------------- */
 
-function buildLlmMessages(sessionId) {
+// OpenAI 协议要求：带 tool_calls 的 assistant 消息后必须紧跟覆盖全部 id 的 tool 消息。
+// 历史数据可能存在悬空调用（旧版 bug、用户未确认就继续提问等），这里统一补齐/清洗。
+const NO_RESULT_TOOL = JSON.stringify({ ok: false, error: "no result was recorded for this tool call" });
+
+export function buildLlmMessages(sessionId) {
   const rows = db
     .prepare("SELECT * FROM chat_messages WHERE session_id=? ORDER BY created_at, rowid")
     .all(sessionId);
   const recent = rows.slice(-MAX_HISTORY_MESSAGES);
   const out = [{ role: "system", content: buildSystemPrompt() }];
+  let awaiting = [];
+
+  const flushAwaiting = () => {
+    for (const id of awaiting.splice(0)) {
+      out.push({ role: "tool", tool_call_id: id, content: NO_RESULT_TOOL });
+    }
+  };
+
   for (const m of recent) {
-    if (m.role === "user") out.push({ role: "user", content: m.content || "" });
-    else if (m.role === "assistant") {
+    if (m.role === "user") {
+      flushAwaiting();
+      out.push({ role: "user", content: m.content || "" });
+    } else if (m.role === "assistant") {
+      let calls = null;
       if (m.tool_calls) {
+        try {
+          calls = JSON.parse(m.tool_calls);
+        } catch {
+          calls = null;
+        }
+      }
+      if (Array.isArray(calls) && calls.length > 0) {
+        flushAwaiting();
         out.push({
           role: "assistant",
           content: m.content || null,
-          tool_calls: JSON.parse(m.tool_calls).map((tc) => ({
-            id: tc.id,
+          tool_calls: calls.map((c) => ({
+            id: c.id,
             type: "function",
-            function: { name: tc.name, arguments: typeof tc.arguments === "string" ? tc.arguments : JSON.stringify(tc.arguments) },
+            function: { name: c.name, arguments: typeof c.arguments === "string" ? c.arguments : JSON.stringify(c.arguments ?? {}) },
           })),
         });
+        awaiting = calls.map((c) => c.id).filter(Boolean);
       } else if (m.content) {
+        flushAwaiting();
         out.push({ role: "assistant", content: m.content });
       }
     } else if (m.role === "tool") {
-      out.push({ role: "tool", tool_call_id: m.tool_call_id, content: m.content || "" });
+      if (m.tool_call_id && awaiting.includes(m.tool_call_id)) {
+        awaiting = awaiting.filter((id) => id !== m.tool_call_id);
+        out.push({ role: "tool", tool_call_id: m.tool_call_id, content: m.content || "" });
+      }
+      // 孤儿/重复的 tool 响应直接丢弃
     }
   }
+  flushAwaiting();
   return out;
 }
 
@@ -300,6 +363,17 @@ function parseToolArgs(call) {
   } catch {
     return { sql: "", purpose: null };
   }
+}
+
+// 拆分工具调用计划：首个写操作之前的读语句立即执行；写操作单独等待用户确认。
+// 关键约束：写调用绝不能混入 visibleCalls，否则持久化的 assistant(tool_calls)
+// 消息将永远等不到 tool 响应，后续每次请求都会触发 LLM 400。
+export function splitToolPlans(plans) {
+  const firstWriteIdx = plans.findIndex((p) => !p.cls.error && p.cls.kind === "write");
+  const executable = firstWriteIdx === -1 ? plans : plans.slice(0, firstWriteIdx);
+  const writePlan = firstWriteIdx === -1 ? null : plans[firstWriteIdx];
+  const visibleCalls = executable.map((p) => p.call);
+  return { executable, writePlan, visibleCalls };
 }
 
 function truncate(s) {
@@ -338,11 +412,7 @@ export async function runAgent(sessionId) {
         const { sql, purpose } = parseToolArgs(call);
         return { call, sql, purpose, cls: classifySql(sql) };
       });
-      const firstWriteIdx = plans.findIndex((p) => !p.cls.error && p.cls.kind === "write");
-      const executable = firstWriteIdx === -1 ? plans : plans.slice(0, firstWriteIdx);
-      const writePlan = firstWriteIdx === -1 ? null : plans[firstWriteIdx];
-
-      const visibleCalls = executable.map((p) => p.call).concat(writePlan ? [writePlan.call] : []);
+      const { executable, writePlan, visibleCalls } = splitToolPlans(plans);
       addMessage(sessionId, { role: "assistant", content: msg.content || "", toolCalls: visibleCalls });
 
       let stopped = false;
@@ -391,14 +461,20 @@ export async function confirmPending(sessionId, approve) {
       "SELECT * FROM chat_messages WHERE session_id=? AND resolved=0 AND pending_sql IS NOT NULL ORDER BY rowid DESC LIMIT 1"
     )
     .get(sessionId);
-  if (!row) return { status: "idle" };
+  if (!row) return { status: "idle", changed: false };
 
   const call = JSON.parse(row.tool_calls)[0];
   db.prepare("UPDATE chat_messages SET resolved=1 WHERE id=?").run(row.id);
 
   let result;
+  let changed = false;
   if (approve) {
     result = execWrite(row.pending_sql);
+    let parsed = {};
+    try {
+      parsed = JSON.parse(result);
+    } catch {}
+    changed = parsed.ok === true;
   } else {
     result = JSON.stringify({ ok: false, rejected: true, message: "用户取消了这个操作" });
   }
@@ -409,7 +485,14 @@ export async function confirmPending(sessionId, approve) {
       role: "assistant",
       content: "好的，已取消该操作，数据未发生任何变化。需要我换个方案吗？",
     });
-    return { status: "idle" };
+    return { status: "idle", changed: false };
   }
-  return runAgent(sessionId);
+  // 写入已生效；后续 LLM 汇总失败不应让前端误以为写入失败
+  let agentResult;
+  try {
+    agentResult = await runAgent(sessionId);
+  } catch (e) {
+    agentResult = { status: "idle", error: e.message };
+  }
+  return { changed, ...agentResult };
 }
