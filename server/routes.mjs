@@ -154,8 +154,8 @@ api.post("/chat/sessions/:id/confirm", async (req, res) => {
   if (!s) return bad(res, "session not found");
   const approve = !!req.body?.approve;
   try {
-    await confirmPending(s.id, approve);
-    res.json({ messages: getSessionMessages(s.id), status: chatStatus(s.id) });
+    const result = await confirmPending(s.id, approve);
+    res.json({ messages: getSessionMessages(s.id), status: chatStatus(s.id), ...result });
   } catch (e) {
     res.status(502).json({
       error: e.message,

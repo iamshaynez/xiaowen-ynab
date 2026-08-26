@@ -39,7 +39,7 @@ export const api = {
       body: JSON.stringify({ content }),
     }),
   confirmChat: (id: string, approve: boolean) =>
-    req<{ messages: ChatMsg[]; status: ChatStatus }>(`/api/chat/sessions/${id}/confirm`, {
+    req<{ messages: ChatMsg[]; status: ChatStatus; changed?: boolean }>(`/api/chat/sessions/${id}/confirm`, {
       method: "POST",
       body: JSON.stringify({ approve }),
     }),

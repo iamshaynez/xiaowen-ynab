@@ -212,6 +212,7 @@ export function ChatPage() {
     try {
       const r = await api.confirmChat(activeId, approve);
       setMessages(r.messages);
+      if (approve && r.changed) await refreshBoot();
     } catch {
       toast(t("chat_errorReply"), "err");
     } finally {

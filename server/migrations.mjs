@@ -99,4 +99,55 @@ CREATE INDEX IF NOT EXISTS idx_chat_msg_session ON chat_messages(session_id, cre
   //     db.exec("ALTER TABLE transactions ADD COLUMN tags TEXT NOT NULL DEFAULT ''");
   //   },
   // },
+  {
+    // v1 的 accounts/transactions 把 created_at 定义为无默认值的 NOT NULL，
+    // 导致 AI 生成的省略该列的 INSERT 全部失败（NOT NULL constraint failed）。
+    // SQLite 无法直接修改列默认值，需按官方流程重建表（外键已在迁移期间关闭）。
+    version: 2,
+    name: "default-created-at",
+    up: (db) => {
+      const CREATED_AT_DEFAULT = "TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))";
+      db.exec(`
+CREATE TABLE accounts_new (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  type TEXT NOT NULL,
+  on_budget INTEGER NOT NULL DEFAULT 0,
+  closed INTEGER NOT NULL DEFAULT 0,
+  starting_balance INTEGER NOT NULL DEFAULT 0,
+  starting_balance_date TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at ${CREATED_AT_DEFAULT}
+);
+INSERT INTO accounts_new(id,name,type,on_budget,closed,starting_balance,starting_balance_date,sort_order,created_at)
+  SELECT id,name,type,on_budget,closed,starting_balance,starting_balance_date,sort_order,created_at FROM accounts;
+DROP TABLE accounts;
+ALTER TABLE accounts_new RENAME TO accounts;
+
+CREATE TABLE transactions_new (
+  id TEXT PRIMARY KEY,
+  account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  date TEXT NOT NULL,
+  payee_name TEXT,
+  transfer_account_id TEXT,
+  category_id TEXT,
+  memo TEXT,
+  amount INTEGER NOT NULL,
+  cleared INTEGER NOT NULL DEFAULT 0,
+  reconciled INTEGER NOT NULL DEFAULT 0,
+  is_start INTEGER NOT NULL DEFAULT 0,
+  pair_id TEXT,
+  created_at ${CREATED_AT_DEFAULT}
+);
+INSERT INTO transactions_new(id,account_id,date,payee_name,transfer_account_id,category_id,memo,amount,cleared,reconciled,is_start,pair_id,created_at)
+  SELECT id,account_id,date,payee_name,transfer_account_id,category_id,memo,amount,cleared,reconciled,is_start,pair_id,created_at FROM transactions;
+DROP TABLE transactions;
+ALTER TABLE transactions_new RENAME TO transactions;
+
+CREATE INDEX IF NOT EXISTS idx_tx_account_date ON transactions(account_id, date);
+CREATE INDEX IF NOT EXISTS idx_tx_category ON transactions(category_id);
+CREATE INDEX IF NOT EXISTS idx_tx_date ON transactions(date);
+`);
+    },
+  },
 ];

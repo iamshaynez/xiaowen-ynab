@@ -28,22 +28,29 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 `);
   const appliedVersions = new Set(db.prepare("SELECT version FROM schema_migrations").all().map((r) => r.version));
   const record = db.prepare("INSERT INTO schema_migrations(version,name,applied_at) VALUES(?,?,?)");
-  for (const m of migrations) {
-    if (appliedVersions.has(m.version)) continue;
-    if (m.version <= Math.max(0, ...appliedVersions)) {
-      throw new Error(`[db] migration version ${m.version} is older than an already applied migration; versions must only grow`);
+  // 表重建类迁移需要 DROP/RENAME 被引用的父表，外键必须在事务外关闭，结束后恢复
+  const fkEnabled = !!db.pragma("foreign_keys", { simple: true });
+  if (fkEnabled) db.pragma("foreign_keys = OFF");
+  try {
+    for (const m of migrations) {
+      if (appliedVersions.has(m.version)) continue;
+      if (m.version <= Math.max(0, ...appliedVersions)) {
+        throw new Error(`[db] migration version ${m.version} is older than an already applied migration; versions must only grow`);
+      }
+      const run = db.transaction(() => {
+        m.up(db);
+        record.run(m.version, m.name, nowIso());
+      });
+      try {
+        run();
+        console.log(`[db] applied migration ${m.version}: ${m.name}`);
+      } catch (e) {
+        console.error(`[db] migration ${m.version} (${m.name}) failed:`, e.message);
+        throw e;
+      }
     }
-    const run = db.transaction(() => {
-      m.up(db);
-      record.run(m.version, m.name, nowIso());
-    });
-    try {
-      run();
-      console.log(`[db] applied migration ${m.version}: ${m.name}`);
-    } catch (e) {
-      console.error(`[db] migration ${m.version} (${m.name}) failed:`, e.message);
-      throw e;
-    }
+  } finally {
+    if (fkEnabled) db.pragma("foreign_keys = ON");
   }
 }
 
