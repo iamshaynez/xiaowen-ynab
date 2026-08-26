@@ -190,6 +190,12 @@ const zh = {
   settings_notBound: "未绑定微信号，请先扫码登录",
   settings_deleteChannelConfirm: "确定删除该渠道？其会话记录将保留。",
   settings_editChannel: "编辑渠道",
+  login_title: "欢迎回来",
+  login_desc: "此应用已启用访问密码。请输入密码以继续。",
+  login_password: "密码",
+  login_button: "登 录",
+  login_checking: "验证中…",
+  login_invalid: "密码错误，请重试",
 };
 
 const en: typeof zh = {
@@ -384,6 +390,12 @@ const en: typeof zh = {
   settings_notBound: "No WeChat linked yet — scan to log in first",
   settings_deleteChannelConfirm: "Delete this channel? Its conversation history will be kept.",
   settings_editChannel: "Edit channel",
+  login_title: "Welcome back",
+  login_desc: "This app is protected by an access password. Enter it to continue.",
+  login_password: "Password",
+  login_button: "Log in",
+  login_checking: "Checking…",
+  login_invalid: "Incorrect password, please try again",
 };
 
 export const dicts = { zh, en };

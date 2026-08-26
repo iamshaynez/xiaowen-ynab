@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { api } from "./api";
 import { makeT, type Lang, type TKey } from "./i18n";
 import { setCurrencySymbol } from "./format";
+import { setToken, clearToken } from "./auth";
 import type { Bootstrap } from "./types";
 
 interface Toast {
@@ -15,6 +16,10 @@ interface AppState {
   boot: Bootstrap | null;
   loading: boolean;
   lang: Lang;
+  authEnabled: boolean;
+  authenticated: boolean;
+  login: (password: string) => Promise<void>;
+  logout: () => void;
   t: (k: TKey, vars?: Record<string, string | number>) => string;
   setLang: (l: Lang) => void;
   refreshBoot: () => Promise<void>;
@@ -30,6 +35,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [lang, setLangState] = useState<Lang>(() => (localStorage.getItem("lang") === "en" ? "en" : "zh"));
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [authEnabled, setAuthEnabled] = useState(false);
+  const [authenticated, setAuthenticated] = useState(false);
 
   const refreshBoot = useCallback(async () => {
     const b = await api.bootstrap();
@@ -38,10 +45,46 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    refreshBoot()
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    async function init() {
+      try {
+        const s = await api.authStatus();
+        setAuthEnabled(s.enabled);
+        if (!s.enabled) {
+          await refreshBoot();
+          setAuthenticated(true);
+          return;
+        }
+        try {
+          await refreshBoot();
+          setAuthenticated(true);
+        } catch {
+          clearToken();
+          setAuthenticated(false);
+        }
+      } catch {
+        setAuthenticated(false);
+      } finally {
+        setLoading(false);
+      }
+    }
+    init();
   }, [refreshBoot]);
+
+  const login = useCallback(
+    async (password: string) => {
+      const { token } = await api.login(password);
+      setToken(token);
+      await refreshBoot();
+      setAuthenticated(true);
+    },
+    [refreshBoot]
+  );
+
+  const logout = useCallback(() => {
+    clearToken();
+    setBoot(null);
+    setAuthenticated(false);
+  }, []);
 
   const setLang = useCallback((l: Lang) => {
     localStorage.setItem("lang", l);
@@ -63,8 +106,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const t = useMemo(() => makeT(lang), [lang]);
 
   const value = useMemo(
-    () => ({ boot, loading, lang, t, setLang, refreshBoot, toast }),
-    [boot, loading, lang, t, setLang, refreshBoot, toast]
+    () => ({ boot, loading, lang, authEnabled, authenticated, login, logout, t, setLang, refreshBoot, toast }),
+    [boot, loading, lang, authEnabled, authenticated, login, logout, t, setLang, refreshBoot, toast]
   );
 
   return (
