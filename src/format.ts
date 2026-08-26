@@ -14,10 +14,10 @@ export function fmtMoney(cents: number, opts?: { sign?: boolean }): string {
 
 export function fmtMoneyShort(cents: number): string {
   const abs = Math.abs(cents);
-  if (abs >= 100000000) return `${cents < 0 ? "-" : ""}${currencySymbol}${(abs / 100000000).toFixed(1)}亿`;
-  if (abs >= 10000000) return `${cents < 0 ? "-" : ""}${currencySymbol}${(abs / 1000000).toFixed(0)}M`;
-  if (abs >= 1000000) return `${cents < 0 ? "-" : ""}${currencySymbol}${(abs / 1000000).toFixed(1)}M`;
-  if (abs >= 100000) return `${cents < 0 ? "-" : ""}${currencySymbol}${Math.round(abs / 100000)}万`.replace("万", "万");
+  const neg = cents < 0 ? "-" : "";
+  if (abs >= 1e10) return `${neg}${currencySymbol}${(abs / 1e10).toFixed(1)}亿`;
+  if (abs >= 1e7) return `${neg}${currencySymbol}${Math.round(abs / 1e6)}万`;
+  if (abs >= 1e6) return `${neg}${currencySymbol}${(abs / 1e6).toFixed(1)}万`;
   return fmtMoney(cents);
 }
 

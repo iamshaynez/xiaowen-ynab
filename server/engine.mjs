@@ -20,8 +20,7 @@ export function earliestMonth() {
 export function listMonths(uptoMonth) {
   const months = [];
   let m = earliestMonth();
-  const limit = uptoMonth < currentMonth() ? uptoMonth : uptoMonth;
-  while (m <= limit && months.length < 600) {
+  while (m <= uptoMonth && months.length < 600) {
     months.push(m);
     m = addMonths(m, 1);
   }
@@ -89,6 +88,7 @@ export function computeBudget(uptoMonth) {
     const assigns = assignByMonth.get(month) || new Map();
 
     let inflow = 0;
+    let uncatOutflow = 0;
     const activity = new Map();
     const ids = catIds();
     for (const id of ids) activity.set(id, 0);
@@ -110,6 +110,7 @@ export function computeBudget(uptoMonth) {
       if (t.is_start || t.transfer_account_id) continue;
       if (t.category_id == null) {
         if (t.amount > 0) inflow += t.amount;
+        else uncatOutflow += -t.amount;
         continue;
       }
       activity.set(t.category_id, (activity.get(t.category_id) || 0) + t.amount);
@@ -123,7 +124,7 @@ export function computeBudget(uptoMonth) {
       assignedTotal += a;
     }
 
-    let rta = carry + inflow - assignedTotal;
+    let rta = carry + inflow - assignedTotal - uncatOutflow;
 
     const avail = new Map();
     let overspent = 0;
