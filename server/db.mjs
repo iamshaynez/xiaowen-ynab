@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
+import { migrations } from "./migrations.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, "..", "data");
@@ -15,86 +16,36 @@ db.pragma("foreign_keys = ON");
 export const uid = () => crypto.randomUUID();
 export const nowIso = () => new Date().toISOString();
 
-db.exec(`
-CREATE TABLE IF NOT EXISTS settings (
-  key TEXT PRIMARY KEY,
-  value TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS accounts (
-  id TEXT PRIMARY KEY,
+runMigrations();
+
+function runMigrations() {
+  db.exec(`
+CREATE TABLE IF NOT EXISTS schema_migrations (
+  version INTEGER PRIMARY KEY,
   name TEXT NOT NULL,
-  type TEXT NOT NULL,
-  on_budget INTEGER NOT NULL DEFAULT 0,
-  closed INTEGER NOT NULL DEFAULT 0,
-  starting_balance INTEGER NOT NULL DEFAULT 0,
-  starting_balance_date TEXT,
-  sort_order INTEGER NOT NULL DEFAULT 0,
-  created_at TEXT NOT NULL
+  applied_at TEXT NOT NULL
 );
-CREATE TABLE IF NOT EXISTS category_groups (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  sort_order INTEGER NOT NULL DEFAULT 0,
-  hidden INTEGER NOT NULL DEFAULT 0
-);
-CREATE TABLE IF NOT EXISTS categories (
-  id TEXT PRIMARY KEY,
-  group_id TEXT NOT NULL REFERENCES category_groups(id) ON DELETE CASCADE,
-  name TEXT NOT NULL,
-  sort_order INTEGER NOT NULL DEFAULT 0,
-  hidden INTEGER NOT NULL DEFAULT 0
-);
-CREATE TABLE IF NOT EXISTS goals (
-  category_id TEXT PRIMARY KEY REFERENCES categories(id) ON DELETE CASCADE,
-  type TEXT NOT NULL,
-  target INTEGER NOT NULL DEFAULT 0,
-  target_month TEXT
-);
-CREATE TABLE IF NOT EXISTS assignments (
-  month TEXT NOT NULL,
-  category_id TEXT NOT NULL,
-  assigned INTEGER NOT NULL DEFAULT 0,
-  PRIMARY KEY (month, category_id)
-);
-CREATE TABLE IF NOT EXISTS transactions (
-  id TEXT PRIMARY KEY,
-  account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-  date TEXT NOT NULL,
-  payee_name TEXT,
-  transfer_account_id TEXT,
-  category_id TEXT,
-  memo TEXT,
-  amount INTEGER NOT NULL,
-  cleared INTEGER NOT NULL DEFAULT 0,
-  reconciled INTEGER NOT NULL DEFAULT 0,
-  is_start INTEGER NOT NULL DEFAULT 0,
-  pair_id TEXT,
-  created_at TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_tx_account_date ON transactions(account_id, date);
-CREATE INDEX IF NOT EXISTS idx_tx_category ON transactions(category_id);
-CREATE INDEX IF NOT EXISTS idx_tx_date ON transactions(date);
-CREATE TABLE IF NOT EXISTS chat_sessions (
-  id TEXT PRIMARY KEY,
-  title TEXT NOT NULL,
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS chat_messages (
-  id TEXT PRIMARY KEY,
-  session_id TEXT NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
-  role TEXT NOT NULL,
-  content TEXT,
-  tool_calls TEXT,
-  tool_call_id TEXT,
-  pending_sql TEXT,
-  pending_purpose TEXT,
-  pending_index INTEGER,
-  resolved INTEGER NOT NULL DEFAULT 1,
-  created_at TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_chat_msg_session ON chat_messages(session_id, created_at);
 `);
+  const appliedVersions = new Set(db.prepare("SELECT version FROM schema_migrations").all().map((r) => r.version));
+  const record = db.prepare("INSERT INTO schema_migrations(version,name,applied_at) VALUES(?,?,?)");
+  for (const m of migrations) {
+    if (appliedVersions.has(m.version)) continue;
+    if (m.version <= Math.max(0, ...appliedVersions)) {
+      throw new Error(`[db] migration version ${m.version} is older than an already applied migration; versions must only grow`);
+    }
+    const run = db.transaction(() => {
+      m.up(db);
+      record.run(m.version, m.name, nowIso());
+    });
+    try {
+      run();
+      console.log(`[db] applied migration ${m.version}: ${m.name}`);
+    } catch (e) {
+      console.error(`[db] migration ${m.version} (${m.name}) failed:`, e.message);
+      throw e;
+    }
+  }
+}
 
 export function getSetting(key, fallback = null) {
   const row = db.prepare("SELECT value FROM settings WHERE key=?").get(key);
