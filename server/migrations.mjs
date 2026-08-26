@@ -150,4 +150,40 @@ CREATE INDEX IF NOT EXISTS idx_tx_date ON transactions(date);
 `);
     },
   },
+  {
+    // IM 渠道（微信 / Telegram）接入：
+    //  - im_channels 存储渠道配置（JSON），cursor 记录 Telegram getUpdates 的 offset。
+    //  - chat_sessions 增加 channel/external_id，把外部 IM 会话映射到内部会话。
+    version: 3,
+    name: "im-channels",
+    up: (db) => {
+      db.exec(`
+CREATE TABLE IF NOT EXISTS im_channels (
+  id TEXT PRIMARY KEY,
+  type TEXT NOT NULL,
+  name TEXT NOT NULL,
+  enabled INTEGER NOT NULL DEFAULT 0,
+  config TEXT NOT NULL DEFAULT '{}',
+  cursor TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+ALTER TABLE chat_sessions ADD COLUMN channel TEXT NOT NULL DEFAULT 'web';
+ALTER TABLE chat_sessions ADD COLUMN external_id TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_chat_sessions_channel ON chat_sessions(channel, external_id);
+`);
+    },
+  },
+  {
+    // IM /new 命令：同一外部用户可拥有多个历史会话（rowid 最大者为当前会话），
+    // 因此把 (channel, external_id) 的唯一索引降级为普通查询索引。
+    version: 4,
+    name: "im-session-history",
+    up: (db) => {
+      db.exec(`
+DROP INDEX IF EXISTS idx_chat_sessions_channel;
+CREATE INDEX IF NOT EXISTS idx_chat_sessions_channel_lookup ON chat_sessions(channel, external_id);
+`);
+    },
+  },
 ];

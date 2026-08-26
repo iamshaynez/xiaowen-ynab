@@ -154,3 +154,66 @@ export interface ChatMsg {
 }
 
 export type ChatStatus = "idle" | "awaiting_confirmation";
+
+export type ImChannelType = "telegram" | "wechat";
+
+export interface TelegramChannelConfig {
+  token: string;
+  allowedChatIds?: string[];
+}
+
+export interface WechatChannelConfig {
+  /** 扫码登录后由服务端写入的 bot token */
+  token: string;
+  baseUrl?: string;
+  userId?: string;
+  botId?: string;
+}
+
+export type ImChannelConfig = TelegramChannelConfig | WechatChannelConfig;
+
+interface ImChannelBase {
+  id: string;
+  name: string;
+  enabled: boolean;
+  cursor: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TelegramChannel extends ImChannelBase {
+  type: "telegram";
+  config: TelegramChannelConfig;
+}
+
+export interface WechatChannel extends ImChannelBase {
+  type: "wechat";
+  config: WechatChannelConfig;
+}
+
+export type ImChannel = TelegramChannel | WechatChannel;
+
+export interface ImChannelInput {
+  type: ImChannelType;
+  name: string;
+  enabled: boolean;
+  config: Record<string, unknown>;
+}
+
+export type WechatLoginStatus =
+  | "qr_ready"
+  | "scanned"
+  | "need_verifycode"
+  | "confirmed"
+  | "already_connected"
+  | "timeout"
+  | "failed";
+
+export interface WechatLoginState {
+  channelId: string;
+  status: WechatLoginStatus;
+  message?: string;
+  qrcodeUrl?: string;
+  qrDataUrl?: string | null;
+  error?: string | null;
+}

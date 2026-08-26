@@ -51,7 +51,7 @@ export async function testAiConnection() {
 /* ------------------------- 动态 Schema 内省 ------------------------- */
 
 // 不向模型展示的表：内部表 + 受保护表（见工作规则）
-const HIDDEN_SCHEMA_TABLES = new Set(["chat_sessions", "chat_messages", "settings", "schema_migrations"]);
+const HIDDEN_SCHEMA_TABLES = new Set(["chat_sessions", "chat_messages", "settings", "schema_migrations", "im_channels"]);
 
 function quoteIdent(name) {
   return `"${String(name).replace(/"/g, '""')}"`;
@@ -131,7 +131,7 @@ ${groups || "  （暂无分类）"}
 # 工作规则
 1. 你拥有 run_sql 工具直接操作上述数据库。回答任何数据问题前先 SELECT 查询确认事实，不要凭空猜测。
 2. 只允许单条 SQL；SELECT 建议加 LIMIT；写操作只能是 INSERT/UPDATE/DELETE 单条语句。
-3. 禁止触碰的表：chat_sessions、chat_messages、settings。禁止 ATTACH/PRAGMA/VACUUM 等命令。
+3. 禁止触碰的表：chat_sessions、chat_messages、settings、im_channels。禁止 ATTACH/PRAGMA/VACUUM 等命令。
 4. 任何写操作（INSERT/UPDATE/DELETE）系统会强制弹出用户确认，你只需发起，然后根据工具返回结果继续。
 5. 写入后建议 SELECT 验证结果，并向用户报告变更摘要。
 6. 回复使用 Markdown。适合时可用 mermaid 代码块（pie/flowchart/xychart 等）做可视化，例如：
@@ -147,7 +147,7 @@ ${groups || "  （暂无分类）"}
 /* ------------------------- SQL safety ------------------------- */
 
 const FORBIDDEN_SQL = /\b(attach|detach|pragma|vacuum|reindex)\b/i;
-const PROTECTED_TABLES = /\b(chat_sessions|chat_messages|settings)\b/i;
+const PROTECTED_TABLES = /\b(chat_sessions|chat_messages|settings|im_channels)\b/i;
 
 export function classifySql(rawSql) {
   const sql = String(rawSql || "").trim().replace(/;+\s*$/, "");
@@ -191,15 +191,22 @@ export function listSessions() {
   return db
     .prepare(
       `SELECT s.*, (SELECT content FROM chat_messages m WHERE m.session_id=s.id AND m.role='user' ORDER BY m.created_at DESC LIMIT 1) AS preview
-       FROM chat_sessions s ORDER BY s.updated_at DESC`
+       FROM chat_sessions s WHERE s.channel='web' ORDER BY s.updated_at DESC`
     )
     .all();
 }
 
-export function createSession(title) {
+export function createSession(title, meta = {}) {
   const id = uid();
   const now = nowIso();
-  db.prepare("INSERT INTO chat_sessions(id,title,created_at,updated_at) VALUES(?,?,?,?)").run(id, title, now, now);
+  db.prepare("INSERT INTO chat_sessions(id,title,channel,external_id,created_at,updated_at) VALUES(?,?,?,?,?,?)").run(
+    id,
+    title,
+    meta.channel || "web",
+    meta.externalId ?? null,
+    now,
+    now
+  );
   return getSessionRow(id);
 }
 
