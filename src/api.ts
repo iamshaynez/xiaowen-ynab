@@ -1,4 +1,16 @@
-import type { Bootstrap, BudgetData, ReportsData, Tx, Account, ChatSession, ChatMsg, ChatStatus } from "./types";
+import type {
+  Bootstrap,
+  BudgetData,
+  ReportsData,
+  Tx,
+  Account,
+  ChatSession,
+  ChatMsg,
+  ChatStatus,
+  ImChannel,
+  ImChannelInput,
+  WechatLoginState,
+} from "./types";
 
 export class ApiError extends Error {}
 
@@ -24,6 +36,24 @@ export const api = {
   saveSettings: (body: { currencySymbol?: string; language?: string; aiBaseUrl?: string; aiModel?: string; aiKey?: string }) =>
     req<{ ok: true }>("/api/settings", { method: "PUT", body: JSON.stringify(body) }),
   aiTest: () => req<{ ok: true; model?: string }>("/api/ai/test", { method: "POST" }),
+
+  imChannels: () => req<{ channels: ImChannel[] }>("/api/im/channels"),
+  createImChannel: (body: ImChannelInput) =>
+    req<{ channel: ImChannel }>("/api/im/channels", { method: "POST", body: JSON.stringify(body) }),
+  updateImChannel: (id: string, body: Partial<ImChannelInput>) =>
+    req<{ channel: ImChannel }>(`/api/im/channels/${id}`, { method: "PUT", body: JSON.stringify(body) }),
+  deleteImChannel: (id: string) => req<{ ok: true }>(`/api/im/channels/${id}`, { method: "DELETE" }),
+  testImChannel: (id: string) =>
+    req<{ ok: true; username?: string }>(`/api/im/channels/${id}/test`, { method: "POST" }),
+
+  // 个人微信扫码登录
+  startWechatLogin: (id: string) =>
+    req<WechatLoginState>(`/api/im/channels/${id}/wechat/login`, { method: "POST" }),
+  wechatLoginState: (id: string) => req<WechatLoginState>(`/api/im/channels/${id}/wechat/login`),
+  submitWechatVerifyCode: (id: string, code: string) =>
+    req<{ ok: true }>(`/api/im/channels/${id}/wechat/login/verify`, { method: "POST", body: JSON.stringify({ code }) }),
+  cancelWechatLogin: (id: string) =>
+    req<{ ok: true }>(`/api/im/channels/${id}/wechat/login`, { method: "DELETE" }),
 
   chatSessions: () => req<{ sessions: ChatSession[] }>("/api/chat/sessions"),
   createChatSession: (title?: string) =>

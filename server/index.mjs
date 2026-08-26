@@ -4,6 +4,7 @@ import path from "node:path";
 import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import { api } from "./routes.mjs";
+import { syncChannels } from "./im/index.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -28,4 +29,6 @@ if (process.env.NODE_ENV === "production") {
 const PORT = Number(process.env.PORT) || 3001;
 app.listen(PORT, () => {
   console.log(`[xiaowen-budget] API listening on http://localhost:${PORT}`);
+  // 启动已启用的 IM 渠道（Telegram 长轮询等）
+  syncChannels();
 });

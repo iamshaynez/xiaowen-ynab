@@ -31,6 +31,21 @@ import {
   testAiConnection,
   appendUserMessage,
 } from "./ai.mjs";
+import {
+  CHANNEL_TYPES,
+  listChannels,
+  getChannel,
+  createChannel,
+  updateChannel,
+  deleteChannel as deleteImChannel,
+} from "./im/store.mjs";
+import { syncChannels } from "./im/index.mjs";
+import {
+  startWechatLogin,
+  getWechatLoginState,
+  submitWechatVerifyCode,
+  stopWechatLogin,
+} from "./im/wechat.mjs";
 
 export const api = express.Router();
 
@@ -90,6 +105,137 @@ api.post("/ai/test", async (req, res) => {
   } catch (e) {
     res.status(400).json({ error: e.message });
   }
+});
+
+/* ------------------------- IM 渠道 ------------------------- */
+
+api.get("/im/channels", (req, res) => {
+  res.json({ channels: listChannels() });
+});
+
+api.post("/im/channels", (req, res) => {
+  const { type, name, enabled, config } = req.body || {};
+  if (!CHANNEL_TYPES.includes(type)) return bad(res, "invalid channel type");
+  try {
+    const channel = createChannel({ type, name, enabled: !!enabled, config: config || {} });
+    syncChannels();
+    res.json({ channel });
+  } catch (e) {
+    bad(res, e.message);
+  }
+});
+
+api.put("/im/channels/:id", (req, res) => {
+  const { name, enabled, config } = req.body || {};
+  try {
+    const channel = updateChannel(req.params.id, { name, enabled, config });
+    if (!channel) return bad(res, "not found");
+    syncChannels();
+    res.json({ channel });
+  } catch (e) {
+    bad(res, e.message);
+  }
+});
+
+api.delete("/im/channels/:id", (req, res) => {
+  deleteImChannel(req.params.id);
+  syncChannels();
+  res.json({ ok: true });
+});
+
+async function testChannel(channel) {
+  if (channel.type === "telegram") {
+    const { createTelegramAdapter } = await import("./im/telegram.mjs");
+    return createTelegramAdapter(channel.config, { log: () => {} }).test();
+  }
+  if (channel.type === "wechat") {
+    const { createWechatPersonalAdapter } = await import("./im/wechat.mjs");
+    return createWechatPersonalAdapter(channel.config, { log: () => {} }).test();
+  }
+  throw new Error("unsupported channel");
+}
+
+api.post("/im/channels/:id/test", async (req, res) => {
+  const ch = getChannel(req.params.id);
+  if (!ch) return bad(res, "not found");
+  try {
+    res.json(await testChannel(ch));
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+/* ------------------------- 个人微信扫码登录 ------------------------- */
+
+function wechatChannelOr400(req, res) {
+  const ch = getChannel(req.params.id);
+  if (!ch || ch.type !== "wechat") {
+    res.status(404).json({ error: "wechat channel not found" });
+    return null;
+  }
+  return ch;
+}
+
+// 发起扫码登录：返回二维码内容（qrcodeUrl 为需编码成二维码图片的链接）
+api.post("/im/channels/:id/wechat/login", async (req, res) => {
+  const ch = wechatChannelOr400(req, res);
+  if (!ch) return;
+  const localTokenList = listChannels()
+    .filter((c) => c.type === "wechat" && c.id !== ch.id && c.config.token)
+    .map((c) => c.config.token);
+  try {
+    const state = await startWechatLogin({
+      channelId: ch.id,
+      localTokenList,
+      pollIntervalMs: Number(process.env.IM_LOGIN_POLL_MS) || undefined,
+      onSave: (creds) => {
+        // 扫码确认后：落库凭据并自动启用，立即开始收发
+        updateChannel(ch.id, {
+          enabled: true,
+          config: { token: creds.token, baseUrl: creds.baseUrl, userId: creds.userId, botId: creds.botId },
+        });
+        syncChannels();
+        console.log(`[im] wechat login confirmed: ${ch.name} (${ch.id})`);
+      },
+    });
+    // qrcodeUrl 是链接，需编码为二维码图片供手机扫描
+    let qrDataUrl = null;
+    if (state.qrcodeUrl) {
+      const QRCode = (await import("qrcode")).default;
+      qrDataUrl = await QRCode.toDataURL(state.qrcodeUrl, { margin: 1, width: 220 });
+    }
+    res.json({ ...state, qrDataUrl });
+  } catch (e) {
+    bad(res, e.message);
+  }
+});
+
+// 轮询登录状态
+api.get("/im/channels/:id/wechat/login", (req, res) => {
+  const ch = wechatChannelOr400(req, res);
+  if (!ch) return;
+  const state = getWechatLoginState(ch.id);
+  if (!state) return bad(res, "no active login");
+  res.json(state);
+});
+
+// 提交手机微信上显示的配对数字
+api.post("/im/channels/:id/wechat/login/verify", (req, res) => {
+  const ch = wechatChannelOr400(req, res);
+  if (!ch) return;
+  const code = String(req.body?.code || "").trim();
+  if (!code) return bad(res, "code required");
+  const ok = submitWechatVerifyCode(ch.id, code);
+  if (!ok) return bad(res, "no active login");
+  res.json({ ok: true });
+});
+
+// 取消登录
+api.delete("/im/channels/:id/wechat/login", (req, res) => {
+  const ch = wechatChannelOr400(req, res);
+  if (!ch) return;
+  stopWechatLogin(ch.id);
+  res.json({ ok: true });
 });
 
 function chatStatus(sessionId) {
