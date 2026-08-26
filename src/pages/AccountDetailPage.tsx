@@ -178,7 +178,7 @@ export function AccountDetailPage({ id }: { id: string }) {
                 <Btn onClick={async () => {
                   if (!confirm(t("confirm_closeAccount"))) return;
                   try {
-                    await api.updateAccount(id, { closed: accMeta?.closed === 1 });
+                    await api.updateAccount(id, { closed: accMeta?.closed !== 1 });
                     await refreshBoot();
                     toast("✓");
                   } catch { toast(t("common_error"), "err"); }

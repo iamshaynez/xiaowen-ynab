@@ -530,7 +530,18 @@ api.put("/transactions/:id", (req, res) => {
 
 function deletePair(t) {
   db.prepare("DELETE FROM transactions WHERE id=?").run(t.id);
-  if (t.pair_id) db.prepare("DELETE FROM transactions WHERE pair_id=? AND id!=?").run(t.pair_id, t.id);
+  if (t.pair_id) {
+    db.prepare("DELETE FROM transactions WHERE pair_id=? AND id!=?").run(t.pair_id, t.id);
+  } else if (t.transfer_account_id) {
+    // 历史数据（如演示数据）的转账没有 pair_id：按 对侧账户+日期+反向金额 找到另一条腿一起删，
+    // 否则会留下孤儿腿导致对方余额重复计算。
+    db.prepare(
+      `DELETE FROM transactions WHERE id IN (
+         SELECT id FROM transactions
+          WHERE account_id = ? AND transfer_account_id = ? AND date = ? AND amount = ? AND is_start = 0
+          LIMIT 1)`
+    ).run(t.transfer_account_id, t.account_id, t.date, -t.amount);
+  }
 }
 
 api.delete("/transactions/:id", (req, res) => {

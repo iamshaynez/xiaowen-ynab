@@ -119,18 +119,16 @@ ${groups || "  （暂无分类）"}
 /* ------------------------- SQL safety ------------------------- */
 
 const FORBIDDEN_SQL = /\b(attach|detach|pragma|vacuum|reindex)\b/i;
-const FORBIDDEN_WRITE_TABLES = /\b(chat_sessions|chat_messages|settings)\b/i;
+const PROTECTED_TABLES = /\b(chat_sessions|chat_messages|settings)\b/i;
 
-function classifySql(rawSql) {
+export function classifySql(rawSql) {
   const sql = String(rawSql || "").trim().replace(/;+\s*$/, "");
   if (!sql) return { error: "empty sql" };
   if (/;/.test(sql)) return { error: "only one statement allowed" };
   if (FORBIDDEN_SQL.test(sql)) return { error: "command not allowed" };
+  if (PROTECTED_TABLES.test(sql)) return { error: "this table is protected" };
   if (/^(select|with)\b/i.test(sql)) return { kind: "read", sql };
-  if (/^(insert|update|delete)\b/i.test(sql)) {
-    if (FORBIDDEN_WRITE_TABLES.test(sql)) return { error: "this table is protected" };
-    return { kind: "write", sql };
-  }
+  if (/^(insert|update|delete)\b/i.test(sql)) return { kind: "write", sql };
   return { error: "only SELECT / INSERT / UPDATE / DELETE are supported" };
 }
 
