@@ -46,10 +46,27 @@ import {
   submitWechatVerifyCode,
   stopWechatLogin,
 } from "./im/wechat.mjs";
+import { isAuthEnabled, verifyPassword, signToken, requireAuth } from "./auth.mjs";
 
 export const api = express.Router();
 
 const bad = (res, msg) => res.status(400).json({ error: msg });
+
+/* --------------------------- 认证 --------------------------- */
+
+api.get("/auth/status", (req, res) => {
+  res.json({ enabled: isAuthEnabled() });
+});
+
+api.post("/auth/login", (req, res) => {
+  if (!isAuthEnabled()) return bad(res, "auth disabled");
+  const password = typeof req.body?.password === "string" ? req.body.password : "";
+  if (!verifyPassword(password)) return res.status(401).json({ error: "invalid password" });
+  res.json({ token: signToken() });
+});
+
+// 之后的所有接口都需要有效 JWT（登录与状态之外），防止绕过
+api.use(requireAuth);
 
 api.post("/demo", (req, res) => {
   const n = db.prepare("SELECT COUNT(*) c FROM transactions").get().c;

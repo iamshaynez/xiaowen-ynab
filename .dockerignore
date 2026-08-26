@@ -1,0 +1,12 @@
+# 构建上下文排除项（Docker build 时不会发送到 daemon）
+.git
+.github
+node_modules
+dist
+data
+*.log
+.env
+.env.*
+Dockerfile
+docker-compose.yml
+*.tsbuildinfo

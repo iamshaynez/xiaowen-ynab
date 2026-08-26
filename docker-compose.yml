@@ -1,0 +1,32 @@
+services:
+  budget:
+    build: .
+    image: xiaowen-ynab:latest
+    container_name: xiaowen-ynab
+    restart: unless-stopped
+    environment:
+      # 可选：设置认证密码后，网页端登录需要该密码
+      APP_PASSWORD: ${APP_PASSWORD:-}
+      # 可选：JWT 签名密钥；不设置时由 APP_PASSWORD 派生
+      JWT_SECRET: ${JWT_SECRET:-}
+      PORT: "3001"
+      # SQLite 数据库固定放置于此（挂载卷持久化）
+      DATA_DIR: /data
+    ports:
+      - "${BUDGET_PORT:-3001}:3001"
+    volumes:
+      # 数据库持久化：宿主机可用 ./data:/data 绑定挂载，或使用命名卷
+      - budget-data:/data
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3001/api/auth/status').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  budget-data:
