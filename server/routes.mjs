@@ -601,13 +601,13 @@ function transformTx(r) {
     amount: r.amount,
     cleared: r.cleared,
     reconciled: r.reconciled,
+    account_name: r.account_name,
   };
 }
 
 api.get("/transactions", (req, res) => {
-  const { search, uncategorized } = req.query;
-  let sql = `SELECT t.*, c.name AS category_name, a.name AS account_name, a.type AS account_type,
-             o.name AS other_account_name, o.type AS other_account_type
+  const { search, uncategorized, accountId } = req.query;
+  let where = `
              FROM transactions t
              LEFT JOIN categories c ON c.id=t.category_id
              JOIN accounts a ON a.id=t.account_id
@@ -615,16 +615,74 @@ api.get("/transactions", (req, res) => {
              WHERE t.is_start=0`;
   const args = [];
   if (search) {
-    sql += " AND (t.payee_name LIKE ? OR t.memo LIKE ? OR c.name LIKE ?)";
+    where += " AND (t.payee_name LIKE ? OR t.memo LIKE ? OR c.name LIKE ?)";
     const like = `%${search}%`;
     args.push(like, like, like);
   }
-  if (uncategorized === "1") sql += " AND t.category_id IS NULL AND t.transfer_account_id IS NULL";
-  sql +=
+  if (uncategorized === "1") where += " AND t.category_id IS NULL AND t.transfer_account_id IS NULL";
+  if (accountId) {
+    where += " AND t.account_id=?";
+    args.push(String(accountId));
+  }
+  where +=
     " AND NOT (t.amount > 0 AND t.transfer_account_id IS NOT NULL AND EXISTS(SELECT 1 FROM accounts o2 WHERE o2.id=t.transfer_account_id AND o2.on_budget=1))";
-  sql += " ORDER BY t.date DESC, t.rowid DESC LIMIT 500";
-  const rows = db.prepare(sql).all(...args);
-  res.json({ transactions: rows.map(transformTx) });
+  const total = db.prepare("SELECT COUNT(*) c " + where).get(...args).c;
+  const limit = Math.min(Math.max(Number.parseInt(req.query.limit, 10) || 500, 1), 2000);
+  const offset = Math.max(Number.parseInt(req.query.offset, 10) || 0, 0);
+  const rows = db
+    .prepare(
+      `SELECT t.*, c.name AS category_name, a.name AS account_name, a.type AS account_type,
+              o.name AS other_account_name, o.type AS other_account_type
+       ${where}
+       ORDER BY t.date DESC, t.rowid DESC LIMIT ? OFFSET ?`
+    )
+    .all(...args, limit, offset);
+  res.json({ total, transactions: rows.map(transformTx) });
+});
+
+// 快速修改单笔交易的分类（不重建行，用于全局交易列表的行内改分类）
+api.patch("/transactions/:id/category", (req, res) => {
+  const existing = db.prepare("SELECT * FROM transactions WHERE id=?").get(req.params.id);
+  if (!existing) return bad(res, "not found");
+  if (existing.is_start) return bad(res, "cannot categorize starting balance");
+  let categoryId = req.body?.categoryId || null;
+  if (categoryId && !db.prepare("SELECT 1 FROM categories WHERE id=?").get(categoryId)) return bad(res, "unknown category");
+  db.prepare("UPDATE transactions SET category_id=? WHERE id=?").run(categoryId, existing.id);
+  res.json({ ok: true });
+});
+
+// 批量设置/清除分类，返回实际修改的行数（跳过期初余额行）
+api.post("/transactions/bulk-category", (req, res) => {
+  const ids = req.body?.ids;
+  const categoryId = req.body?.categoryId || null;
+  if (!Array.isArray(ids) || ids.some((id) => typeof id !== "string")) return bad(res, "ids required");
+  if (categoryId && !db.prepare("SELECT 1 FROM categories WHERE id=?").get(categoryId)) return bad(res, "unknown category");
+  let changed = 0;
+  const setStmt = db.prepare(
+    "UPDATE transactions SET category_id=? WHERE id=? AND is_start=0 AND category_id IS NOT ?"
+  );
+  const run = db.transaction(() => {
+    for (const id of ids) changed += setStmt.run(categoryId, id, categoryId).changes;
+  });
+  run();
+  res.json({ ok: true, changed });
+});
+
+// 批量删除交易，转账对腿一并删除；期初余额行与不存在的 id 跳过
+api.post("/transactions/bulk-delete", (req, res) => {
+  const ids = req.body?.ids;
+  if (!Array.isArray(ids) || ids.some((id) => typeof id !== "string")) return bad(res, "ids required");
+  let changed = 0;
+  const run = db.transaction(() => {
+    for (const id of ids) {
+      const existing = db.prepare("SELECT * FROM transactions WHERE id=?").get(id);
+      if (!existing || existing.is_start) continue;
+      deletePair(existing);
+      changed++;
+    }
+  });
+  run();
+  res.json({ ok: true, changed });
 });
 
 api.post("/transactions", (req, res) => {
