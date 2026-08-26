@@ -9,7 +9,10 @@
     "dev:web": "vite",
     "build": "tsc -b && vite build",
     "start": "NODE_ENV=production node server/index.mjs",
-    "typecheck": "tsc -b --noEmit"
+    "typecheck": "tsc -b --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "better-sqlite3": "^12.4.1",
@@ -34,6 +37,7 @@
     "concurrently": "^9.2.1",
     "tailwindcss": "^4.1.14",
     "typescript": "^5.9.3",
-    "vite": "^6.3.6"
+    "vite": "^6.3.6",
+    "vitest": "^2.1.9"
   }
 }
