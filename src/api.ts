@@ -61,6 +61,7 @@ export const api = {
       body: JSON.stringify({ categoryId, fromId }),
     }),
   autoAssign: (month: string) => req<BudgetData>(`/api/budget/${month}/auto-assign`, { method: "POST" }),
+  copyLastMonth: (month: string) => req<BudgetData>(`/api/budget/${month}/copy-previous`, { method: "POST" }),
 
   accounts: () => req<{ accounts: Account[] }>("/api/accounts"),
   createAccount: (body: { name: string; type: string; startingBalance: number; startingDate?: string }) =>

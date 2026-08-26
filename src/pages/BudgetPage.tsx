@@ -7,6 +7,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Coins,
+  CopyPlus,
   MoreHorizontal,
   Pencil,
   Plus,
@@ -16,7 +17,7 @@ import {
 } from "lucide-react";
 import { api } from "../api";
 import { useApp } from "../store";
-import { fmtMoney, fmtMonth, parseAmountToCents } from "../format";
+import { fmtMoney, fmtMoneyShort, fmtMonth, fmtMonthShort, parseAmountToCents } from "../format";
 import type { BudCategory, BudGroup, BudgetData } from "../types";
 import { Btn, Field, Modal, Spinner, inputCls } from "../components/ui";
 
@@ -38,34 +39,50 @@ function useCollapsedGroups() {
   return { collapsed, toggle };
 }
 
-type Selection = { kind: "rta" } | { kind: "cat"; cat: BudCategory; groupId: string } | null;
+type Selection =
+  | { kind: "rta" }
+  | { kind: "cat"; cat: BudCategory; groupId: string; month: string }
+  | null;
+
+const GRID =
+  "grid grid-cols-[minmax(150px,1fr)_92px_76px_100px_92px_76px_100px_92px_76px_100px] items-center gap-x-2";
+const MONTH_GRID = "grid grid-cols-[92px_76px_100px] items-center gap-x-2";
 
 export function BudgetPage() {
   const { boot, t, lang, refreshBoot, toast } = useApp();
-  const [month, setMonth] = useState<string>("");
-  const [data, setData] = useState<BudgetData | null>(null);
+  const [base, setBase] = useState<string>("");
+  const [win, setWin] = useState<{ months: string[]; data: Record<string, BudgetData> } | null>(null);
   const [sel, setSel] = useState<Selection>(null);
-  const [editing, setEditing] = useState<{ catId: string; value: string } | null>(null);
+  const [editing, setEditing] = useState<{ catId: string; month: string; value: string } | null>(null);
   const [moveOpen, setMoveOpen] = useState(false);
   const [coverOpen, setCoverOpen] = useState(false);
   const [addOpen, setAddOpen] = useState<"group" | "category" | null>(null);
-  const [addGroupId, setAddGroupId] = useState<string>("");
+  const [addGroupId, setAddGroupId] = useState("");
   const [groupMenu, setGroupMenu] = useState<{ id: string; x: number; y: number } | null>(null);
   const [renameOpen, setRenameOpen] = useState<{ kind: "group" | "category"; id: string; name: string } | null>(null);
+  const [copying, setCopying] = useState(false);
   const { collapsed, toggle } = useCollapsedGroups();
   const rtaMenuRef = useRef<HTMLDivElement>(null);
+  const stripRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!month && boot) setMonth(boot.currentMonth);
-  }, [boot, month]);
+    if (!base && boot) setBase(boot.currentMonth);
+  }, [boot, base]);
 
   const load = useCallback(async (m: string) => {
-    setData(await api.budget(m));
+    const months = [shiftMonth(m, -1), m, shiftMonth(m, 1)];
+    const list = await Promise.all(months.map((mm) => api.budget(mm).catch(() => null)));
+    const data: Record<string, BudgetData> = {};
+    list.forEach((d, i) => {
+      if (d) data[months[i]] = d;
+    });
+    if (!data[m]) throw new Error("bad month");
+    setWin({ months, data });
   }, []);
 
   useEffect(() => {
-    if (month) load(month).catch(() => toast(t("common_error"), "err"));
-  }, [month, load, t, toast]);
+    if (base) load(base).catch(() => toast(t("common_error"), "err"));
+  }, [base, load, t, toast]);
 
   useEffect(() => {
     const h = () => setGroupMenu(null);
@@ -73,44 +90,88 @@ export function BudgetPage() {
     return () => window.removeEventListener("click", h);
   }, []);
 
-  if (!boot || !data) return <Spinner />;
+  const timelineMonths = useMemo(() => {
+    const curD = win?.data[base];
+    if (!curD) return [];
+    const arr: string[] = [];
+    let m = curD.months[0];
+    while (m <= curD.maxMonth && arr.length < 240) {
+      arr.push(m);
+      m = shiftMonth(m, 1);
+    }
+    return arr;
+  }, [win, base]);
 
-  const isCurrent = data.month === boot.currentMonth;
-  const canNext = data.month < data.maxMonth;
-  const canPrev = data.months.length === 0 || data.month > data.months[0];
-  const allCats = data.groups.flatMap((g) => g.categories.map((c) => ({ c, g })));
-  const overspentCats = allCats.filter(({ c }) => c.available < 0);
+  const loaded = !!win?.data[base];
+  useEffect(() => {
+    if (!loaded) return;
+    stripRef.current?.querySelector(`[data-m="${base}"]`)?.scrollIntoView({ inline: "center", block: "nearest" });
+  }, [base, loaded]);
 
-  const apply = (d: BudgetData) => setData(d);
-  const commitAssign = async (catId: string, value: string) => {
+  if (!boot || !loaded || !win) return <Spinner />;
+
+  const monthsWin = win.months;
+  const cur = win.data[base];
+  const firstMonth = cur.months[0];
+  const isCurrent = base === boot.currentMonth;
+  const canNext = base < cur.maxMonth;
+  const canPrev = base > firstMonth;
+
+  const apply = (d: BudgetData) =>
+    setWin((w) => (w && w.data[d.month] ? { ...w, data: { ...w.data, [d.month]: d } } : w));
+
+  const commitAssign = async (month: string, catId: string, value: string) => {
     setEditing(null);
     const cents = parseAmountToCents(value);
     if (cents == null || cents < 0) return;
-    apply(await api.assign(data.month, catId, cents));
+    apply(await api.assign(month, catId, cents));
   };
 
-  const emptyStart = boot.accounts.length === 0 && data.months.length === 1 && data.incomeThisMonth === 0;
+  const copyPrev = async (m: string) => {
+    if (!confirm(t("budget_copyLastConfirm"))) return;
+    setCopying(true);
+    try {
+      apply(await api.copyLastMonth(m));
+      toast(t("budget_copyLastOk"));
+    } catch {
+      toast(t("common_error"), "err");
+    } finally {
+      setCopying(false);
+    }
+  };
+
+  const catIndex: Record<string, Map<string, BudCategory>> = {};
+  for (const m of monthsWin) {
+    const d = win.data[m];
+    if (!d) continue;
+    const map = new Map<string, BudCategory>();
+    for (const g of d.groups) for (const c of g.categories) map.set(c.id, c);
+    catIndex[m] = map;
+  }
+
+  const overspentCats = cur.groups.flatMap((g) => g.categories).filter((c) => c.available < 0);
+  const selData = sel?.kind === "cat" ? win.data[sel.month] ?? cur : cur;
+
+  const emptyStart = boot.accounts.length === 0 && cur.months.length === 1 && cur.incomeThisMonth === 0;
   if (emptyStart) return <EmptyStart />;
 
   return (
     <div className="flex h-full">
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex h-full min-w-[1060px] flex-1 flex-col">
         {/* Header */}
-        <div className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur">
-          <div className="flex flex-wrap items-center gap-3 px-6 pb-3 pt-4">
+        <div className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur">
+          <div className="flex flex-wrap items-center gap-3 px-6 pb-2 pt-3">
             <div className="flex items-center gap-1 rounded-xl bg-slate-100 p-1">
               <button
-                onClick={() => canPrev && setMonth(shiftMonth(data.month, -1))}
+                onClick={() => canPrev && setBase(shiftMonth(base, -1))}
                 disabled={!canPrev}
                 className="rounded-lg p-1.5 text-slate-500 hover:bg-white hover:text-slate-800 hover:shadow-sm disabled:opacity-30"
               >
                 <ChevronLeft size={17} />
               </button>
-              <div className="min-w-[128px] text-center text-sm font-semibold text-slate-800">
-                {fmtMonth(data.month, lang)}
-              </div>
+              <div className="min-w-[128px] text-center text-sm font-semibold text-slate-800">{fmtMonth(base, lang)}</div>
               <button
-                onClick={() => canNext && setMonth(shiftMonth(data.month, 1))}
+                onClick={() => canNext && setBase(shiftMonth(base, 1))}
                 disabled={!canNext}
                 className="rounded-lg p-1.5 text-slate-500 hover:bg-white hover:text-slate-800 hover:shadow-sm disabled:opacity-30"
               >
@@ -118,7 +179,7 @@ export function BudgetPage() {
               </button>
               {!isCurrent && (
                 <button
-                  onClick={() => setMonth(boot.currentMonth)}
+                  onClick={() => setBase(boot.currentMonth)}
                   className="ml-1 rounded-lg px-2 py-1 text-xs font-medium text-brand-600 hover:bg-white"
                 >
                   {lang === "zh" ? "今" : "Today"}
@@ -129,17 +190,15 @@ export function BudgetPage() {
             {/* RTA */}
             <div className="relative" ref={rtaMenuRef}>
               <button
-                onClick={() =>
-                  setSel(sel?.kind === "rta" ? null : { kind: "rta" })
-                }
-                className={`group flex items-baseline gap-2 rounded-xl px-4 py-2 shadow-sm transition-all ${
-                  data.readyToAssign < 0
+                onClick={() => setSel(sel?.kind === "rta" ? null : { kind: "rta" })}
+                className={`flex items-baseline gap-2 rounded-xl px-4 py-2 shadow-sm transition-all ${
+                  cur.readyToAssign < 0
                     ? "bg-rose-600 text-white hover:bg-rose-700"
                     : "bg-gradient-to-r from-brand-600 to-brand-500 text-white hover:brightness-110"
                 } ${sel?.kind === "rta" ? "ring-2 ring-offset-2 ring-brand-300" : ""}`}
               >
                 <span className="text-xs font-medium opacity-90">{t("budget_rta")}</span>
-                <span className="num text-lg font-bold">{fmtMoney(data.readyToAssign)}</span>
+                <span className="num text-lg font-bold">{fmtMoney(cur.readyToAssign)}</span>
                 <ChevronDown size={14} className="self-center opacity-70" />
               </button>
               {sel?.kind === "rta" && (
@@ -147,18 +206,22 @@ export function BudgetPage() {
                   <div className="space-y-1.5 text-[13px]">
                     <div className="flex justify-between text-slate-500">
                       <span>{t("budget_incomeThisMonth")}</span>
-                      <b className="num text-emerald-600">{fmtMoney(data.incomeThisMonth)}</b>
+                      <b className="num text-emerald-600">{fmtMoney(cur.incomeThisMonth)}</b>
                     </div>
                     <div className="flex justify-between text-slate-500">
                       <span>{t("budget_assignedTotal")}</span>
-                      <b className="num text-slate-700">{fmtMoney(data.assignedTotal)}</b>
+                      <b className="num text-slate-700">{fmtMoney(cur.assignedTotal)}</b>
                     </div>
                     <div className="flex justify-between border-t border-slate-100 pt-1.5 text-slate-500">
                       <span>{t("rep_aom")}</span>
-                      <b className="num text-slate-700">{data.ageOfMoney}d</b>
+                      <b className="num text-slate-700">{cur.ageOfMoney}d</b>
                     </div>
                   </div>
-                  <Btn variant="primary" className="mt-3 w-full" onClick={() => api.autoAssign(data.month).then(apply).then(() => toast(t("budget_autoAssign") + " ✓"))}>
+                  <Btn
+                    variant="primary"
+                    className="mt-3 w-full"
+                    onClick={() => api.autoAssign(cur.month).then(apply).then(() => toast(t("budget_autoAssign") + " ✓"))}
+                  >
                     <Sparkles size={14} /> {t("budget_autoAssign")}
                   </Btn>
                 </div>
@@ -169,7 +232,7 @@ export function BudgetPage() {
               {overspentCats.length > 0 && (
                 <Btn variant="danger" onClick={() => setCoverOpen(true)}>
                   <AlertTriangle size={14} />
-                  {t("budget_overspent")} {fmtMoney(Math.abs(data.overspentTotal))}
+                  {t("budget_overspent")} {fmtMoney(Math.abs(cur.overspentTotal))}
                 </Btn>
               )}
               <Btn onClick={() => setMoveOpen(true)}>
@@ -187,34 +250,83 @@ export function BudgetPage() {
             </div>
           </div>
 
-          {!isCurrent && data.month > boot.currentMonth && (
+          {/* Month timeline */}
+          <div ref={stripRef} className="flex items-center gap-1 overflow-x-auto px-6 pb-1.5 pt-0.5">
+            {timelineMonths.map((m, i) => {
+              const prev = i > 0 ? timelineMonths[i - 1] : "";
+              const showYear = !prev || m.slice(0, 4) !== prev.slice(0, 4);
+              return (
+                <div key={m} className="flex items-center">
+                  {showYear && <span className="px-2 text-[11px] font-bold text-slate-300">{m.slice(0, 4)}</span>}
+                  <button
+                    data-m={m}
+                    onClick={() => setBase(m)}
+                    title={fmtMonth(m, lang)}
+                    className={`shrink-0 rounded-full px-2.5 py-1 text-[12px] font-medium transition-colors ${
+                      m === base
+                        ? "bg-brand-600 text-white shadow-sm"
+                        : m === boot.currentMonth
+                          ? "bg-white text-brand-600 ring-1 ring-brand-200 hover:bg-brand-50"
+                          : "text-slate-400 hover:bg-white hover:text-slate-700 hover:shadow-sm"
+                    }`}
+                  >
+                    {fmtMonthShort(m, lang)}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+
+          {!isCurrent && base > boot.currentMonth && (
             <div className="border-t border-amber-100 bg-amber-50 px-6 py-1.5 text-xs text-amber-700">
               {t("budget_futureHint")}
             </div>
           )}
-          {data.uncategorizedCount > 0 && (
+          {cur.uncategorizedCount > 0 && (
             <a href="#/accounts" className="block border-t border-amber-100 bg-amber-50 px-6 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-100">
               <AlertTriangle size={12} className="mr-1 inline" />
-              {t("budget_uncategorized", { n: data.uncategorizedCount })}
+              {t("budget_uncategorized", { n: cur.uncategorizedCount })}
               <span className="ml-2 underline">{t("budget_goResolve")} →</span>
             </a>
           )}
 
           {/* Column headers */}
-          <div className="grid grid-cols-[minmax(200px,1fr)_120px_120px_140px] gap-x-2 px-6 pb-2 pt-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400 max-md:grid-cols-[minmax(140px,1fr)_84px_84px_96px]">
+          <div className={`${GRID} px-6 pb-1 pt-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400`}>
             <div>{t("nav_budget").toUpperCase()}</div>
-            <div className="text-right">{t("budget_assignCol")}</div>
-            <div className="text-right">{t("budget_activityCol")}</div>
-            <div className="text-right">{t("budget_availableCol")}</div>
+            {monthsWin.map((m) => (
+              <MonthHead
+                key={m}
+                m={m}
+                data={win.data[m]}
+                active={m === base}
+                first={firstMonth}
+                copying={copying}
+                onPick={() => setBase(m)}
+                onCopy={() => copyPrev(m)}
+              />
+            ))}
+          </div>
+          <div className={`${GRID} px-6 pb-2 text-[10px] font-medium uppercase tracking-wide text-slate-300`}>
+            <div />
+            {monthsWin.map((m) => (
+              <div key={m} className={`${MONTH_GRID} col-span-3`}>
+                <div className="text-right">{t("budget_assignCol")}</div>
+                <div className="text-right">{t("budget_activityCol")}</div>
+                <div className="text-right">{t("budget_availableCol")}</div>
+              </div>
+            ))}
           </div>
         </div>
 
         {/* Table body */}
         <div className="flex-1 space-y-4 px-3 py-4">
-          {data.groups.map((g) => (
+          {cur.groups.map((g) => (
             <GroupBlock
               key={g.id}
               group={g}
+              monthsWin={monthsWin}
+              catIndex={catIndex}
+              activeMonth={base}
               collapsed={collapsed.includes(g.id)}
               onToggle={() => toggle(g.id)}
               selection={sel}
@@ -240,7 +352,7 @@ export function BudgetPage() {
       {sel && (
         <Inspector
           sel={sel}
-          data={data}
+          data={selData}
           onClose={() => setSel(null)}
           onApply={apply}
           onCover={() => setCoverOpen(true)}
@@ -251,7 +363,7 @@ export function BudgetPage() {
             try {
               await api.deleteCategory(id);
               setSel(null);
-              await Promise.all([load(data.month), refreshBoot()]);
+              await Promise.all([load(base), refreshBoot()]);
               toast("OK");
             } catch {
               toast(t("account_deleteWarn"), "err");
@@ -262,7 +374,7 @@ export function BudgetPage() {
 
       {moveOpen && (
         <MoveMoneyModal
-          data={data}
+          data={cur}
           onClose={() => setMoveOpen(false)}
           onDone={(d) => {
             apply(d);
@@ -272,7 +384,7 @@ export function BudgetPage() {
       )}
       {coverOpen && (
         <CoverModal
-          data={data}
+          data={cur}
           initialCatId={sel?.kind === "cat" && sel.cat.available < 0 ? sel.cat.id : undefined}
           onClose={() => setCoverOpen(false)}
           onDone={(d) => {
@@ -289,7 +401,7 @@ export function BudgetPage() {
           onClose={() => setAddOpen(null)}
           onDone={async () => {
             setAddOpen(null);
-            await Promise.all([load(data.month), refreshBoot()]);
+            await Promise.all([load(base), refreshBoot()]);
           }}
         />
       )}
@@ -328,7 +440,7 @@ export function BudgetPage() {
                     setGroupMenu(null);
                     try {
                       await api.deleteGroup(grp.id);
-                      await Promise.all([load(data.month), refreshBoot()]);
+                      await Promise.all([load(base), refreshBoot()]);
                     } catch {
                       toast(lang === "zh" ? "分组不为空" : "Group is not empty", "err");
                     }
@@ -350,7 +462,7 @@ export function BudgetPage() {
             if (renameOpen.kind === "group") await api.renameGroup(renameOpen.id, name);
             else await api.renameCategory(renameOpen.id, name);
             setRenameOpen(null);
-            await Promise.all([load(data.month), refreshBoot()]);
+            await Promise.all([load(base), refreshBoot()]);
           }}
         />
       )}
@@ -381,6 +493,14 @@ const pillCls: Record<string, string> = {
   income: "",
 };
 
+function availCls(c: BudCategory): string {
+  const st = statusOf(c);
+  if (st === "overspent") return pillCls.overspent;
+  if (st === "partial") return pillCls.partial;
+  if (st === "funded") return pillCls.funded;
+  return "text-slate-700";
+}
+
 function goalPct(c: BudCategory): number | null {
   if (!c.goal) return null;
   if (c.goal.type === "monthly" && c.goal.target > 0) return Math.min((c.assigned / c.goal.target) * 100, 100);
@@ -389,8 +509,64 @@ function goalPct(c: BudCategory): number | null {
   return null;
 }
 
+/* ------------------------------ Month header cell ------------------------------ */
+
+function MonthHead({
+  m,
+  data,
+  active,
+  first,
+  copying,
+  onPick,
+  onCopy,
+}: {
+  m: string;
+  data?: BudgetData;
+  active: boolean;
+  first: string;
+  copying: boolean;
+  onPick: () => void;
+  onCopy: () => void;
+}) {
+  const { t, lang } = useApp();
+  const rta = data?.readyToAssign;
+  return (
+    <div className={`col-span-3 flex items-center justify-between gap-1 rounded-lg pl-2 pr-1 ${active ? "bg-brand-50" : ""}`}>
+      <button
+        onClick={onPick}
+        title={fmtMonth(m, lang)}
+        className={`truncate py-1 text-[11px] font-semibold uppercase tracking-wide transition-colors ${
+          active ? "text-brand-700" : "text-slate-400 hover:text-slate-600"
+        }`}
+      >
+        {fmtMonth(m, lang)}
+      </button>
+      <span className="flex shrink-0 items-center gap-0.5">
+        {rta != null && (
+          <span className={`num text-[10px] ${rta < 0 ? "font-semibold text-rose-500" : "text-slate-400"}`} title={t("budget_rta")}>
+            {fmtMoneyShort(rta)}
+          </span>
+        )}
+        <button
+          onClick={onCopy}
+          disabled={!data || copying || m <= first}
+          title={data && m > first ? t("budget_copyLast") : undefined}
+          className="rounded p-1 text-slate-300 transition-colors hover:bg-brand-100 hover:text-brand-600 disabled:pointer-events-none disabled:opacity-40"
+        >
+          <CopyPlus size={13} />
+        </button>
+      </span>
+    </div>
+  );
+}
+
+/* ------------------------------ Group & rows ------------------------------ */
+
 function GroupBlock({
   group,
+  monthsWin,
+  catIndex,
+  activeMonth,
   collapsed,
   onToggle,
   selection,
@@ -402,32 +578,27 @@ function GroupBlock({
   onQuickAdd,
 }: {
   group: BudGroup;
+  monthsWin: string[];
+  catIndex: Record<string, Map<string, BudCategory>>;
+  activeMonth: string;
   collapsed: boolean;
   onToggle: () => void;
   selection: Selection;
   onSelect: (s: Selection) => void;
-  editing: { catId: string; value: string } | null;
-  setEditing: (e: { catId: string; value: string } | null) => void;
-  onCommitAssign: (catId: string, v: string) => void;
+  editing: { catId: string; month: string; value: string } | null;
+  setEditing: React.Dispatch<React.SetStateAction<{ catId: string; month: string; value: string } | null>>;
+  onCommitAssign: (month: string, catId: string, v: string) => void;
   onMenu: (e: React.MouseEvent, id: string) => void;
   onQuickAdd: () => void;
 }) {
   const { t, lang } = useApp();
   const cats = group.categories;
-  const totals = cats.reduce(
-    (acc, c) => ({
-      assigned: acc.assigned + c.assigned,
-      activity: acc.activity + c.activity,
-      available: acc.available + c.available,
-    }),
-    { assigned: 0, activity: 0, available: 0 }
-  );
   const groupName = group.virtual ? (lang === "zh" ? "信用卡还款" : "Credit Card Payments") : group.name;
 
   return (
     <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-card">
       <header
-        className="grid cursor-pointer grid-cols-[minmax(200px,1fr)_120px_120px_140px] items-center gap-x-2 bg-slate-50/80 px-3 py-2 transition-colors hover:bg-slate-100/80 max-md:grid-cols-[minmax(140px,1fr)_84px_84px_96px]"
+        className={`${GRID} cursor-pointer bg-slate-50/80 px-3 py-2 transition-colors hover:bg-slate-100/80`}
         onClick={onToggle}
       >
         <div className="flex items-center gap-1.5 pl-1 text-[13px] font-bold text-slate-700">
@@ -445,23 +616,58 @@ function GroupBlock({
             </button>
           )}
         </div>
-        <div className="num text-right text-[13px] font-semibold text-slate-500">{fmtMoney(totals.assigned)}</div>
-        <div className="num text-right text-[13px] font-semibold text-slate-500">{fmtMoney(totals.activity)}</div>
-        <div className="num text-right text-[13px] font-bold text-slate-600">{fmtMoney(totals.available)}</div>
+        {monthsWin.map((m) => {
+          const idx = catIndex[m];
+          const has = !!idx;
+          const tot = cats.reduce(
+            (acc, c) => {
+              const cc = idx?.get(c.id);
+              acc.assigned += cc?.assigned ?? 0;
+              acc.activity += cc?.activity ?? 0;
+              acc.available += cc?.available ?? 0;
+              return acc;
+            },
+            { assigned: 0, activity: 0, available: 0 }
+          );
+          return (
+            <div key={m} className={`${MONTH_GRID} col-span-3 rounded-lg py-0.5 ${m === activeMonth && has ? "bg-brand-50/70" : ""}`}>
+              <div className="num pr-2 text-right text-[13px] font-semibold text-slate-500">
+                {has ? fmtMoney(tot.assigned) : "–"}
+              </div>
+              <div className="num pr-2 text-right text-[13px] font-semibold text-slate-500">
+                {has ? fmtMoney(tot.activity) : "–"}
+              </div>
+              <div className="num pr-2 text-right text-[13px] font-bold text-slate-600">
+                {has ? fmtMoney(tot.available) : "–"}
+              </div>
+            </div>
+          );
+        })}
       </header>
       {!collapsed && (
         <div className="border-t border-slate-100">
           {cats.map((c) => (
             <Row
               key={c.id}
-              cat={c}
+              catId={c.id}
+              name={c.name ?? ""}
+              monthsWin={monthsWin}
+              catIndex={catIndex}
+              activeMonth={activeMonth}
               selected={selection?.kind === "cat" && selection.cat.id === c.id}
-              onSelect={() => onSelect({ kind: "cat", cat: c, groupId: group.id })}
-              editing={editing?.catId === c.id ? editing.value : null}
-              onStartEdit={() => setEditing({ catId: c.id, value: (c.assigned / 100).toString() })}
-              onChange={(v) => setEditing({ catId: c.id, value: v })}
+              onSelect={() => {
+                const src = catIndex[activeMonth]?.get(c.id);
+                if (src) onSelect({ kind: "cat", cat: src, groupId: group.id, month: activeMonth });
+              }}
+              editingMonth={editing?.catId === c.id ? editing.month : null}
+              editingValue={editing?.catId === c.id ? editing.value : null}
+              onStartEdit={(m) => {
+                const cc = catIndex[m]?.get(c.id);
+                setEditing({ catId: c.id, month: m, value: ((cc?.assigned ?? 0) / 100).toString() });
+              }}
+              onChange={(v) => setEditing((e) => (e && e.catId === c.id ? { ...e, value: v } : e))}
               onCancelEdit={() => setEditing(null)}
-              onCommit={(v) => onCommitAssign(c.id, v)}
+              onCommit={(m, v) => onCommitAssign(m, c.id, v)}
             />
           ))}
           {!group.virtual && (
@@ -479,89 +685,98 @@ function GroupBlock({
 }
 
 function Row({
-  cat,
+  catId,
+  name,
+  monthsWin,
+  catIndex,
+  activeMonth,
   selected,
   onSelect,
-  editing,
+  editingMonth,
+  editingValue,
   onStartEdit,
   onChange,
   onCancelEdit,
   onCommit,
 }: {
-  cat: BudCategory;
+  catId: string;
+  name: string;
+  monthsWin: string[];
+  catIndex: Record<string, Map<string, BudCategory>>;
+  activeMonth: string;
   selected: boolean;
   onSelect: () => void;
-  editing: string | null;
-  onStartEdit: () => void;
+  editingMonth: string | null;
+  editingValue: string | null;
+  onStartEdit: (month: string) => void;
   onChange: (v: string) => void;
   onCancelEdit: () => void;
-  onCommit: (v: string) => void;
+  onCommit: (month: string, v: string) => void;
 }) {
-  const st = statusOf(cat);
-  const pct = goalPct(cat);
-  const activityPositive = cat.activity > 0;
-
   return (
     <div
       onClick={onSelect}
-      className={`row-hover relative grid cursor-pointer grid-cols-[minmax(200px,1fr)_120px_120px_140px] items-center gap-x-2 border-b border-slate-50 px-3 py-[7px] text-[13px] transition-colors last:border-b-0 max-md:grid-cols-[minmax(140px,1fr)_84px_84px_96px] ${
+      className={`row-hover relative ${GRID} cursor-pointer border-b border-slate-50 px-3 py-[7px] text-[13px] transition-colors last:border-b-0 ${
         selected ? "bg-brand-50/80" : "hover:bg-slate-50"
       }`}
     >
-      {pct != null && pct > 0 && (
-        <div
-          className="absolute bottom-0 left-0 h-[3px] rounded-full bg-gradient-to-r transition-all"
-          style={{
-            width: `${pct}%`,
-            background: pct >= 100 ? "#10b981" : "linear-gradient(90deg,#f59e0b,#fbbf24)",
-          }}
-        />
-      )}
-      <div className="truncate pl-4 font-medium text-slate-700">{cat.name}</div>
-      <div className="text-right" onClick={(e) => e.stopPropagation()}>
-        {editing != null ? (
-          <input
-            autoFocus
-            className="cell-input"
-            value={editing}
-            onChange={(e) => onChange(e.target.value)}
-            onBlur={() => onCommit(editing)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") onCommit(editing);
-              if (e.key === "Escape") onCancelEdit();
-            }}
-          />
-        ) : (
-          <button
-            onClick={onStartEdit}
-            className={`num w-full rounded-md px-2 py-1 text-right text-[13px] transition-colors hover:bg-brand-50 ${
-              cat.assigned === 0 ? "text-slate-300 hover:text-brand-500" : "font-medium text-slate-700"
-            }`}
-          >
-            {cat.assigned === 0 ? "–" : fmtMoney(cat.assigned)}
-          </button>
-        )}
-      </div>
-      <div className={`num px-2 text-right text-[13px] ${activityPositive ? "text-emerald-600" : "text-slate-500"}`}>
-        {cat.activity === 0 ? "–" : fmtMoney(cat.activity)}
-      </div>
-      <div className="flex justify-end px-1">
-        <span
-          className={`num rounded-md px-2 py-1 text-[13px] font-semibold ${
-            st === "overspent"
-              ? `${pillCls.overspent}`
-              : st === "partial"
-                ? `${pillCls.partial}`
-                : st === "funded"
-                  ? `${pillCls.funded}`
-                  : cat.available < 0
-                    ? ""
-                    : "text-slate-700"
-          }`}
-        >
-          {fmtMoney(cat.available)}
-        </span>
-      </div>
+      <div className="truncate pl-4 font-medium text-slate-700">{name}</div>
+      {monthsWin.map((m) => {
+        const cat = catIndex[m]?.get(catId) ?? null;
+        const pct = cat ? goalPct(cat) : null;
+        const isEditing = editingMonth === m && !!cat;
+        return (
+          <div key={m} className={`${MONTH_GRID} relative col-span-3 rounded-lg ${m === activeMonth && cat ? "bg-brand-50/40" : ""}`}>
+            {pct != null && pct > 0 && (
+              <div
+                className="absolute bottom-0 left-1 right-1 h-[3px] overflow-hidden rounded-full"
+                aria-hidden
+              >
+                <div
+                  className="h-full rounded-full bg-gradient-to-r transition-all"
+                  style={{
+                    width: `${pct}%`,
+                    background: pct >= 100 ? "#10b981" : "linear-gradient(90deg,#f59e0b,#fbbf24)",
+                  }}
+                />
+              </div>
+            )}
+            <div className="text-right" onClick={(e) => e.stopPropagation()}>
+              {isEditing ? (
+                <input
+                  autoFocus
+                  className="cell-input"
+                  value={editingValue ?? ""}
+                  onChange={(e) => onChange(e.target.value)}
+                  onBlur={() => onCommit(m, editingValue ?? "")}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") onCommit(m, editingValue ?? "");
+                    if (e.key === "Escape") onCancelEdit();
+                  }}
+                />
+              ) : (
+                <button
+                  onClick={() => onStartEdit(m)}
+                  disabled={!cat}
+                  className={`num w-full rounded-md px-2 py-1 text-right transition-colors hover:bg-brand-50 disabled:pointer-events-none ${
+                    !cat || cat.assigned === 0 ? "text-slate-300 hover:text-brand-500" : "font-medium text-slate-700"
+                  }`}
+                >
+                  {!cat || cat.assigned === 0 ? "–" : fmtMoney(cat.assigned)}
+                </button>
+              )}
+            </div>
+            <div className={`num pr-2 text-right ${!cat ? "text-slate-300" : cat.activity > 0 ? "text-emerald-600" : "text-slate-500"}`}>
+              {!cat ? "–" : fmtMoney(cat.activity)}
+            </div>
+            <div className="pr-2 text-right">
+              <span className={`num rounded-md px-2 py-1 text-[13px] font-semibold ${!cat ? "text-slate-300" : availCls(cat)}`}>
+                {!cat ? "–" : fmtMoney(cat.available)}
+              </span>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -625,7 +840,7 @@ function Inspector({
             <Sparkles size={14} /> {t("budget_autoAssign")}
           </Btn>
           <Btn className="mt-2 w-full" onClick={onMove}>
-            <ArrowRightLeft size={14} /> {t("budget_moveMoney")}
+            <ArrowRightLeft size={14} /> {t("inspector_moveBtn")}
           </Btn>
         </>
       ) : cat ? (
@@ -646,11 +861,7 @@ function Inspector({
             }
           />
 
-          <div
-            className={`mt-3 rounded-xl p-3 ${
-              cat.available < 0 ? "bg-rose-50" : "bg-slate-50"
-            }`}
-          >
+          <div className={`mt-3 rounded-xl p-3 ${cat.available < 0 ? "bg-rose-50" : "bg-slate-50"}`}>
             <div className="text-[11px] font-medium uppercase tracking-wide text-slate-400">{t("inspector_available")}</div>
             <div className={`num mt-0.5 text-3xl font-bold ${cat.available < 0 ? "text-rose-600" : "text-slate-800"}`}>
               {fmtMoney(cat.available)}

@@ -323,6 +323,22 @@ api.post("/budget/:month/cover", (req, res) => {
   res.json(budgetPayload(month));
 });
 
+api.post("/budget/:month/copy-previous", (req, res) => {
+  const { month } = req.params;
+  if (!/^\d{4}-\d{2}$/.test(month)) return bad(res, "bad month");
+  const prev = addMonths(month, -1);
+  const rows = db.prepare("SELECT category_id, assigned FROM assignments WHERE month=?").all(prev);
+  if (rows.length > 0) {
+    const tx = db.transaction(() => {
+      db.prepare("DELETE FROM assignments WHERE month=?").run(month);
+      const ins = db.prepare("INSERT INTO assignments(month,category_id,assigned) VALUES(?,?,?)");
+      for (const r of rows) ins.run(month, r.category_id, r.assigned);
+    });
+    tx();
+  }
+  res.json(budgetPayload(month));
+});
+
 api.post("/budget/:month/auto-assign", (req, res) => {
   const { month } = req.params;
   const p = budgetPayload(month);
