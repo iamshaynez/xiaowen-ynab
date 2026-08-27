@@ -48,6 +48,7 @@ vi.mock("../store", () => ({
         aiBaseUrl: "https://api.deepseek.com/v1",
         aiModel: "deepseek-chat",
         aiKey: "sk-test",
+        aiExtraPrompt: "",
         backupEnabled: true,
         backupCronTime: "04:30",
         backupR2Endpoint: "https://acct.r2.cloudflarestorage.com",
@@ -120,9 +121,23 @@ describe("SettingsPage", () => {
         aiBaseUrl: "https://api.deepseek.com/v1",
         aiModel: "deepseek-chat",
         aiKey: "sk-test",
+        aiExtraPrompt: "",
       })
     );
     await waitFor(() => expect(h.refreshBoot).toHaveBeenCalled());
+  });
+
+  it("保存额外提示词：编辑后随 AI 配置一起提交", async () => {
+    h.saveSettings.mockResolvedValue({ ok: true });
+    render(<SettingsPage />);
+    const textarea = (await screen.findByPlaceholderText("settings_extraPromptPlaceholder")) as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: "我是小王，工资每月 10 号入账。" } });
+    fireEvent.click(screen.getByRole("button", { name: "settings_aiSave" }));
+    await waitFor(() =>
+      expect(h.saveSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ aiExtraPrompt: "我是小王，工资每月 10 号入账。" })
+      )
+    );
   });
 
   it("测试连接：先保存再调用 aiTest，成功时 toast 提示", async () => {

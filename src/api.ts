@@ -46,6 +46,7 @@ export const api = {
     aiBaseUrl?: string;
     aiModel?: string;
     aiKey?: string;
+    aiExtraPrompt?: string;
     backupEnabled?: boolean;
     backupCronTime?: string;
     backupR2Endpoint?: string;

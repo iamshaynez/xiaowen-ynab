@@ -196,6 +196,11 @@ const zh = {
   settings_baseUrl: "Base URL（OpenAI 兼容接口）",
   settings_model: "模型名称",
   settings_apiKey: "API Key",
+  settings_extraPrompt: "额外提示词",
+  settings_extraPromptPlaceholder:
+    "例如：我是小王，常用的转账对方是房东张女士，工资每月 10 号入账……",
+  settings_extraPromptHint:
+    "保存后会嵌入智能助手（含 IM 渠道）的系统提示词，作为用户自定义上下文优先遵循。留空则不追加。",
   settings_aiSave: "保存 AI 配置",
   settings_testConn: "测试连接",
   settings_testOk: "连接成功",
@@ -442,6 +447,11 @@ const en: typeof zh = {
   settings_baseUrl: "Base URL (OpenAI-compatible)",
   settings_model: "Model",
   settings_apiKey: "API Key",
+  settings_extraPrompt: "Extra prompt",
+  settings_extraPromptPlaceholder:
+    "e.g. I'm Xiaowang, I usually transfer to my landlord Mrs. Zhang, salary arrives on the 10th of each month…",
+  settings_extraPromptHint:
+    "Saved into the assistant's system prompt (web + IM). The assistant follows this as your custom context. Leave empty to skip.",
   settings_aiSave: "Save AI config",
   settings_testConn: "Test connection",
   settings_testOk: "Connected",

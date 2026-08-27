@@ -53,11 +53,17 @@ export function SettingsPage() {
   const [aiBaseUrl, setAiBaseUrl] = useState(boot?.settings.aiBaseUrl ?? "");
   const [aiModel, setAiModel] = useState(boot?.settings.aiModel ?? "");
   const [aiKey, setAiKey] = useState(boot?.settings.aiKey ?? "");
+  const [aiExtraPrompt, setAiExtraPrompt] = useState(boot?.settings.aiExtraPrompt ?? "");
   const [testing, setTesting] = useState(false);
   const configured = !!boot?.settings.aiKey;
 
   const saveAi = async () => {
-    await api.saveSettings({ aiBaseUrl: aiBaseUrl.trim(), aiModel: aiModel.trim(), aiKey: aiKey.trim() });
+    await api.saveSettings({
+      aiBaseUrl: aiBaseUrl.trim(),
+      aiModel: aiModel.trim(),
+      aiKey: aiKey.trim(),
+      aiExtraPrompt: aiExtraPrompt.trim(),
+    });
     await refreshBoot();
     toast(t("settings_savedOk"));
   };
@@ -213,6 +219,20 @@ export function SettingsPage() {
             placeholder="sk-…"
           />
         </Field>
+        <div className="mb-4">
+          <div className="mb-1 flex items-center justify-between">
+            <span className="text-xs font-medium text-slate-500">{t("settings_extraPrompt")}</span>
+            <span className="text-[11px] text-slate-300">{aiExtraPrompt.length}/20000</span>
+          </div>
+          <textarea
+            className={`${inputCls} min-h-[96px] resize-y`}
+            value={aiExtraPrompt}
+            maxLength={20000}
+            onChange={(e) => setAiExtraPrompt(e.target.value)}
+            placeholder={t("settings_extraPromptPlaceholder")}
+          />
+          <p className="mt-1 text-[11px] leading-relaxed text-slate-400">{t("settings_extraPromptHint")}</p>
+        </div>
         <div className="flex items-center gap-2">
           <Btn variant="primary" onClick={saveAi}>
             <Check size={14} /> {t("settings_aiSave")}
