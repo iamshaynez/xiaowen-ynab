@@ -55,6 +55,9 @@ export const api = express.Router();
 
 const bad = (res, msg) => res.status(400).json({ error: msg });
 
+// 额外提示词会被嵌入 LLM 系统提示词（网页 + IM 共用），设一个合理上限防止异常内容撑爆请求体
+const MAX_EXTRA_PROMPT_CHARS = 20000;
+
 function isIncomeCategory(categoryId) {
   if (!categoryId) return false;
   return !!db
@@ -93,6 +96,7 @@ api.get("/bootstrap", (req, res) => {
       aiBaseUrl: getSetting("ai_base_url", "https://api.openai.com/v1"),
       aiModel: getSetting("ai_model", "gpt-4o-mini"),
       aiKey: getSetting("ai_key", ""),
+      aiExtraPrompt: getSetting("ai_extra_prompt", ""),
       ...readBackupSettings(),
     },
     accounts: accountsWithBalances(),
@@ -114,6 +118,7 @@ api.get("/settings", (req, res) => {
     aiBaseUrl: getSetting("ai_base_url", "https://api.openai.com/v1"),
     aiModel: getSetting("ai_model", "gpt-4o-mini"),
     aiKey: getSetting("ai_key", ""),
+    aiExtraPrompt: getSetting("ai_extra_prompt", ""),
     ...readBackupSettings(),
   });
 });
@@ -125,6 +130,7 @@ api.put("/settings", (req, res) => {
     aiBaseUrl,
     aiModel,
     aiKey,
+    aiExtraPrompt,
     backupEnabled,
     backupCronTime,
     backupR2Endpoint,
@@ -150,6 +156,10 @@ api.put("/settings", (req, res) => {
   if (typeof aiBaseUrl === "string" && aiBaseUrl.trim()) setSetting("ai_base_url", aiBaseUrl.trim());
   if (typeof aiModel === "string" && aiModel.trim()) setSetting("ai_model", aiModel.trim());
   if (typeof aiKey === "string") setSetting("ai_key", aiKey.trim());
+  if (typeof aiExtraPrompt === "string") {
+    if (aiExtraPrompt.trim().length > MAX_EXTRA_PROMPT_CHARS) return bad(res, "ai extra prompt too long");
+    setSetting("ai_extra_prompt", aiExtraPrompt.trim());
+  }
 
   if (typeof backupEnabled === "boolean") setSetting("backup_enabled", backupEnabled ? "1" : "0");
   if (cronNormalized !== undefined) setSetting("backup_cron_time", cronNormalized);

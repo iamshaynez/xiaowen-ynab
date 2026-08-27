@@ -531,7 +531,7 @@ function MonthHead({
   const { t, lang } = useApp();
   const rta = data?.readyToAssign;
   return (
-    <div className={`col-span-3 flex items-center justify-between gap-1 rounded-lg pl-2 pr-1 ${active ? "bg-brand-50" : ""}`}>
+    <div className={`col-span-3 flex items-center justify-between gap-1 rounded-lg pl-2 pr-1 ${active ? "bg-brand-50" : "bg-slate-100"}`}>
       <button
         onClick={onPick}
         title={fmtMonth(m, lang)}
@@ -630,7 +630,7 @@ function GroupBlock({
             { assigned: 0, activity: 0, available: 0 }
           );
           return (
-            <div key={m} className={`${MONTH_GRID} col-span-3 rounded-lg py-0.5 ${m === activeMonth && has ? "bg-brand-50/70" : ""}`}>
+            <div key={m} className={`${MONTH_GRID} col-span-3 rounded-lg py-0.5 ${m === activeMonth && has ? "bg-brand-50" : has ? "bg-slate-100" : ""}`}>
               <div className="num pr-2 text-right text-[13px] font-semibold text-slate-500">
                 {has ? fmtMoney(tot.assigned) : "–"}
               </div>
@@ -726,7 +726,7 @@ function Row({
         const pct = cat ? goalPct(cat) : null;
         const isEditing = editingMonth === m && !!cat;
         return (
-          <div key={m} className={`${MONTH_GRID} relative col-span-3 rounded-lg ${m === activeMonth && cat ? "bg-brand-50/40" : ""}`}>
+          <div key={m} className={`${MONTH_GRID} relative col-span-3 rounded-lg ${m === activeMonth && cat ? "bg-brand-50" : cat ? "bg-slate-100" : ""}`}>
             {pct != null && pct > 0 && (
               <div
                 className="absolute bottom-0 left-1 right-1 h-[3px] overflow-hidden rounded-full"
