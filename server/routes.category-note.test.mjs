@@ -27,7 +27,8 @@ const call = async (method, url, body) => {
   return { status: res.status, json: await res.json() };
 };
 
-const gid = db.prepare("SELECT id FROM category_groups LIMIT 1").get().id;
+// 必须显式挑一个非收入组：收入组会被预算载荷过滤，且无 ORDER BY 的 LIMIT 1 在不同环境下返回的行不稳定（CI 踩过坑）。
+const gid = db.prepare("SELECT id FROM category_groups WHERE is_income=0 ORDER BY sort_order LIMIT 1").get().id;
 const catId = uid();
 db.prepare("INSERT INTO categories(id,group_id,name,sort_order) VALUES(?,?,?,0)").run(catId, gid, "备注测试分类");
 const cur = currentMonth();
