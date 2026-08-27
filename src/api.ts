@@ -169,6 +169,8 @@ export const api = {
     req<{ id: string }>("/api/categories", { method: "POST", body: JSON.stringify({ groupId, name }) }),
   renameCategory: (id: string, name: string) =>
     req<{ ok: true }>(`/api/categories/${id}`, { method: "PUT", body: JSON.stringify({ name }) }),
+  updateCategory: (id: string, patch: { name?: string; note?: string }) =>
+    req<{ ok: true }>(`/api/categories/${id}`, { method: "PUT", body: JSON.stringify(patch) }),
   deleteCategory: (id: string) => req<{ ok: true }>(`/api/categories/${id}`, { method: "DELETE" }),
   setGoal: (
     categoryId: string,

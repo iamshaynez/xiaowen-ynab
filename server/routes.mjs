@@ -454,7 +454,7 @@ function budgetPayload(month) {
       id: g.id,
       name: g.name,
       virtual: false,
-      categories: g.categories.filter((c) => !c.hidden).map((c) => catView(c.id, { name: c.name })),
+      categories: g.categories.filter((c) => !c.hidden).map((c) => catView(c.id, { name: c.name, note: c.note })),
     }));
 
   const ccAccounts = db
@@ -953,7 +953,8 @@ api.put("/categories/:id", (req, res) => {
   const c = db.prepare("SELECT * FROM categories WHERE id=?").get(req.params.id);
   if (!c) return bad(res, "not found");
   const name = (req.body?.name ?? c.name).trim();
-  db.prepare("UPDATE categories SET name=? WHERE id=?").run(name || c.name, c.id);
+  const note = req.body?.note ?? c.note;
+  db.prepare("UPDATE categories SET name=?, note=? WHERE id=?").run(name || c.name, String(note), c.id);
   res.json({ ok: true });
 });
 

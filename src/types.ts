@@ -45,6 +45,7 @@ export interface Category {
   name: string;
   sort_order: number;
   hidden: 0 | 1;
+  note: string;
   goal: Goal | null;
 }
 
@@ -84,6 +85,7 @@ export interface BudCategory {
   need: Need | null;
   lastAssigned: number;
   avgSpend: number;
+  note?: string;
 }
 
 export interface BudGroup {
