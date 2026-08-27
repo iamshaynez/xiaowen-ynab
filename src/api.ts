@@ -126,7 +126,11 @@ export const api = {
   deleteAccount: (id: string) => req<{ accounts: Account[] }>(`/api/accounts/${id}`, { method: "DELETE" }),
   accountRegister: (id: string) =>
     req<{ account: Account & { balance: number }; transactions: Tx[] }>(`/api/accounts/${id}/transactions`),
-  reconcile: (accountId: string) => req<{ ok: true }>(`/api/reconcile/${accountId}`, { method: "POST" }),
+  reconcile: (accountId: string, body?: { statementBalance?: number; markCleared?: boolean }) =>
+    req<{ ok: true; adjustment: number | null }>(`/api/reconcile/${accountId}`, {
+      method: "POST",
+      body: JSON.stringify(body ?? {}),
+    }),
 
   transactions: (params: { search?: string; uncategorized?: boolean; accountId?: string; limit?: number; offset?: number }) => {
     const q = new URLSearchParams();

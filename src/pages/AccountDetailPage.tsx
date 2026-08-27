@@ -14,8 +14,8 @@ import {
 } from "lucide-react";
 import { api } from "../api";
 import { useApp } from "../store";
-import { fmtDate, fmtMoney } from "../format";
-import { Btn, Spinner, inputCls } from "../components/ui";
+import { fmtDate, fmtMoney, parseAmountToCents } from "../format";
+import { Btn, Modal, Spinner, Field, inputCls } from "../components/ui";
 import { AmountInput, CategorySelect, PayeeSelect, defaultIncomeCategory, emptyForm, formAmount, incomeCategoryIds, type FormState } from "../components/txEdit";
 import { ACCOUNT_TYPE_LABELS } from "./AccountsPage";
 import type { Tx } from "../types";
@@ -27,6 +27,7 @@ export function AccountDetailPage({ id }: { id: string }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<FormState>(emptyForm);
   const [search, setSearch] = useState("");
+  const [reconciling, setReconciling] = useState(false);
   const saveRef = useRef(false);
 
   const load = useCallback(async () => {
@@ -58,6 +59,8 @@ export function AccountDetailPage({ id }: { id: string }) {
   const clearedBalance =
     (boot.accounts.find((a) => a.id === id)?.starting_balance ?? 0) +
     reg.transactions.filter((tx) => tx.cleared === 1 && !tx.isStart).reduce((s, tx) => s + tx.amount, 0);
+  // 对账弹窗里的“一并勾为已清算”只针对非转账流水，与后端 markCleared 的口径一致
+  const unclearedCount = reg.transactions.filter((tx) => !tx.isStart && !tx.transferAccountId && tx.cleared === 0).length;
 
   const saveNew = async () => {
     if (saveRef.current) return;
@@ -144,7 +147,7 @@ export function AccountDetailPage({ id }: { id: string }) {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <Btn onClick={async () => { if (!confirm(lang === "zh" ? "将所有已清交易标记为已对账？" : "Mark all cleared transactions reconciled?")) return; await api.reconcile(id); await load(); toast("✓"); }}>
+              <Btn onClick={() => setReconciling(true)}>
                 <Check size={14} /> {t("account_reconcile")}
               </Btn>
               {!isCredit && (
@@ -223,7 +226,97 @@ export function AccountDetailPage({ id }: { id: string }) {
           />
         </div>
       </div>
+
+      {reconciling && (
+        <ReconcileModal
+          id={id}
+          balance={reg.account.balance}
+          unclearedCount={unclearedCount}
+          onClose={() => setReconciling(false)}
+          onDone={async () => {
+            await Promise.all([load(), refreshBoot()]);
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+/* ------------------------- Reconcile ------------------------- */
+
+function ReconcileModal({
+  id,
+  balance,
+  unclearedCount,
+  onClose,
+  onDone,
+}: {
+  id: string;
+  balance: number;
+  unclearedCount: number;
+  onClose: () => void;
+  onDone: () => Promise<void>;
+}) {
+  const { t, toast } = useApp();
+  const [v, setV] = useState((balance / 100).toFixed(2));
+  const [markCleared, setMarkCleared] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const cents = parseAmountToCents(v);
+  const diff = cents === null ? null : cents - balance;
+
+  const submit = async () => {
+    if (cents === null || busy) return;
+    setBusy(true);
+    try {
+      await api.reconcile(id, { statementBalance: cents, markCleared });
+      await onDone();
+      toast("✓");
+      onClose();
+    } catch {
+      toast(t("common_error"), "err");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal title={t("rec_title")} onClose={onClose}>
+      <div className="mb-3 flex items-center justify-between text-sm text-slate-600">
+        <span>{t("rec_currentBalance")}</span>
+        <span className="num font-semibold text-slate-900">{fmtMoney(balance)}</span>
+      </div>
+      <Field label={t("rec_statement")}>
+        <input
+          autoFocus
+          className={`${inputCls} num text-right`}
+          value={v}
+          onChange={(e) => setV(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && submit()}
+        />
+      </Field>
+      {diff !== null && diff !== 0 && (
+        <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
+          {t("rec_diffHint", { amount: fmtMoney(diff) })}
+        </p>
+      )}
+      {unclearedCount > 0 && (
+        <label className="flex items-center gap-2 text-xs text-slate-600">
+          <input
+            type="checkbox"
+            className="accent-brand-600"
+            checked={markCleared}
+            onChange={(e) => setMarkCleared(e.target.checked)}
+          />
+          {t("rec_markCleared", { n: unclearedCount })}
+        </label>
+      )}
+      <div className="mt-4 flex justify-end gap-2">
+        <Btn onClick={onClose}>{t("common_cancel")}</Btn>
+        <Btn variant="primary" disabled={cents === null || busy} onClick={submit}>
+          {t("common_confirm")}
+        </Btn>
+      </div>
+    </Modal>
   );
 }
 
@@ -252,7 +345,7 @@ function HeaderName({ name, onSave }: { name: string; onSave: (n: string) => voi
 
 /* ------------------------- Form row ------------------------- */
 
-const gridCls = "grid grid-cols-[34px_110px_minmax(140px,1fr)_minmax(130px,1fr)_minmax(90px,1fr)_90px_90px_100px] items-center gap-x-1";
+const gridCls = "grid grid-cols-[34px_110px_minmax(140px,1fr)_minmax(130px,1fr)_minmax(90px,1fr)_128px_128px_140px] items-center gap-x-1";
 
 function TxFormRow({
   form,
