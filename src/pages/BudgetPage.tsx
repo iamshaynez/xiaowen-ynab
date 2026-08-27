@@ -945,6 +945,19 @@ function Inspector({
 
             {!cat.id.startsWith("cc:") && (
               <div className="mt-5 border-t border-slate-100 pt-4">
+                <NoteEditor
+                  note={cat.note ?? ""}
+                  onSave={async (note) => {
+                    await api.updateCategory(cat.id, { note });
+                    onApply(await api.budget(data.month));
+                    toast("✓");
+                  }}
+                />
+              </div>
+            )}
+
+            {!cat.id.startsWith("cc:") && (
+              <div className="mt-5 border-t border-slate-100 pt-4">
                 <GoalEditor
                   cat={cat}
                   gf={gf}
@@ -997,6 +1010,36 @@ function SectionTitle({
         ✕
       </button>
     </div>
+  );
+}
+
+function NoteEditor({ note, onSave }: { note: string; onSave: (note: string) => Promise<void> }) {
+  const { t } = useApp();
+  const [value, setValue] = useState(note);
+  const [saved, setSaved] = useState(note);
+  return (
+    <>
+      <Field label={t("inspector_note")}>
+        <textarea
+          className={inputCls + " min-h-[96px] resize-y"}
+          placeholder={t("inspector_notePlaceholder")}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+        />
+      </Field>
+      {value !== saved && (
+        <Btn
+          variant="primary"
+          className="w-full"
+          onClick={async () => {
+            await onSave(value);
+            setSaved(value);
+          }}
+        >
+          {t("common_save")}
+        </Btn>
+      )}
+    </>
   );
 }
 
