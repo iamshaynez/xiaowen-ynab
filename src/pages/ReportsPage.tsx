@@ -49,7 +49,7 @@ export function ReportsPage() {
   const cur = data.income[data.income.length - 1];
 
   return (
-    <div className="mx-auto max-w-6xl px-6 py-8">
+    <div className="mx-auto max-w-6xl px-4 py-6 md:px-6 md:py-8">
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-xl font-bold text-slate-900">{t("nav_reports")}</h1>
         <span className="text-xs text-slate-400">{t("rep_months", { n: 12 })}</span>

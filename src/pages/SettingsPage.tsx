@@ -167,7 +167,7 @@ export function SettingsPage() {
   }, [loadChannels]);
 
   return (
-    <div className="mx-auto w-full max-w-4xl space-y-5 px-6 py-8">
+    <div className="mx-auto w-full max-w-4xl space-y-5 px-4 py-6 md:px-6 md:py-8">
       <h1 className="text-lg font-bold text-slate-800">{t("settings_title")}</h1>
 
       <Card title={t("settings_general")}>
