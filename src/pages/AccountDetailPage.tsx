@@ -16,7 +16,7 @@ import { api } from "../api";
 import { useApp } from "../store";
 import { fmtDate, fmtMoney } from "../format";
 import { Btn, Spinner, inputCls } from "../components/ui";
-import { AmountInput, CategorySelect, PayeeSelect, emptyForm, formAmount, type FormState } from "../components/txEdit";
+import { AmountInput, CategorySelect, PayeeSelect, defaultIncomeCategory, emptyForm, formAmount, incomeCategoryIds, type FormState } from "../components/txEdit";
 import { ACCOUNT_TYPE_LABELS } from "./AccountsPage";
 import type { Tx } from "../types";
 
@@ -265,7 +265,10 @@ function TxFormRow({
   onSave: () => void;
   excludeAccountId: string;
 }) {
-  const { t } = useApp();
+  const { t, boot } = useApp();
+  const groups = boot?.groups ?? [];
+  const incomeIds = incomeCategoryIds(groups);
+  const defaultIncomeId = defaultIncomeCategory(groups);
   return (
     <div className={`${gridCls} px-3 py-2`} onKeyDown={(e) => e.key === "Enter" && onSave()}>
       <div />
@@ -288,8 +291,16 @@ function TxFormRow({
         value={form.memo}
         onChange={(e) => setForm({ ...form, memo: e.target.value })}
       />
-      <AmountInput value={form.outflow} onChange={(v) => setForm({ ...form, outflow: v, inflow: "" })} placeholder={t("tx_outflow")} />
-      <AmountInput value={form.inflow} onChange={(v) => setForm({ ...form, inflow: v, outflow: "" })} placeholder={t("tx_inflow")} />
+      <AmountInput
+        value={form.outflow}
+        onChange={(v) => setForm({ ...form, outflow: v, inflow: "", categoryId: incomeIds.has(form.categoryId) ? "" : form.categoryId })}
+        placeholder={t("tx_outflow")}
+      />
+      <AmountInput
+        value={form.inflow}
+        onChange={(v) => setForm({ ...form, inflow: v, outflow: "", categoryId: form.categoryId || defaultIncomeId })}
+        placeholder={t("tx_inflow")}
+      />
       <div className="flex justify-end pr-1">
         <Btn variant="primary" onClick={onSave}>
           <Check size={14} />

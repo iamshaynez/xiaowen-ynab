@@ -52,6 +52,13 @@ export const api = express.Router();
 
 const bad = (res, msg) => res.status(400).json({ error: msg });
 
+function isIncomeCategory(categoryId) {
+  if (!categoryId) return false;
+  return !!db
+    .prepare("SELECT 1 FROM categories c JOIN category_groups g ON g.id=c.group_id WHERE c.id=? AND g.is_income=1")
+    .get(categoryId);
+}
+
 /* --------------------------- 认证 --------------------------- */
 
 api.get("/auth/status", (req, res) => {
@@ -378,7 +385,7 @@ function budgetPayload(month) {
   });
 
   const groups = groupsWithCategories()
-    .filter((g) => !g.hidden)
+    .filter((g) => !g.hidden && !g.is_income)
     .map((g) => ({
       id: g.id,
       name: g.name,
@@ -647,6 +654,7 @@ api.patch("/transactions/:id/category", (req, res) => {
   if (existing.is_start) return bad(res, "cannot categorize starting balance");
   let categoryId = req.body?.categoryId || null;
   if (categoryId && !db.prepare("SELECT 1 FROM categories WHERE id=?").get(categoryId)) return bad(res, "unknown category");
+  if (categoryId && existing.amount < 0 && isIncomeCategory(categoryId)) return bad(res, "income category requires positive amount");
   db.prepare("UPDATE transactions SET category_id=? WHERE id=?").run(categoryId, existing.id);
   res.json({ ok: true });
 });
@@ -657,6 +665,12 @@ api.post("/transactions/bulk-category", (req, res) => {
   const categoryId = req.body?.categoryId || null;
   if (!Array.isArray(ids) || ids.some((id) => typeof id !== "string")) return bad(res, "ids required");
   if (categoryId && !db.prepare("SELECT 1 FROM categories WHERE id=?").get(categoryId)) return bad(res, "unknown category");
+  if (categoryId && isIncomeCategory(categoryId)) {
+    for (const id of ids) {
+      const r = db.prepare("SELECT amount,is_start FROM transactions WHERE id=?").get(id);
+      if (r && !r.is_start && r.amount < 0) return bad(res, "income category requires positive amount");
+    }
+  }
   let changed = 0;
   const setStmt = db.prepare(
     "UPDATE transactions SET category_id=? WHERE id=? AND is_start=0 AND category_id IS NOT ?"
@@ -729,6 +743,7 @@ function createTx(body, opts = {}) {
 
 function insertLeg({ id, account, amount, date, payeeName, categoryId, memo, transferAccountId, cleared, pairId }) {
   if (categoryId && !db.prepare("SELECT 1 FROM categories WHERE id=?").get(categoryId)) categoryId = null;
+  if (categoryId && amount < 0 && isIncomeCategory(categoryId)) throw new Error("income category requires positive amount");
   db.prepare(
     `INSERT INTO transactions(id,account_id,date,payee_name,transfer_account_id,category_id,memo,amount,cleared,reconciled,is_start,pair_id,created_at)
      VALUES(?,?,?,?,?,?,?,?,?,0,0,?,?)`
@@ -741,11 +756,15 @@ api.put("/transactions/:id", (req, res) => {
   if (existing.is_start) return bad(res, "cannot edit starting balance");
   const keepId = existing.id;
   const keepPair = existing.pair_id;
-  const tx = db.transaction(() => {
-    deletePair(existing);
-    createTx({ ...req.body, cleared: req.body.cleared ?? !!existing.cleared }, { keepId, keepPair });
-  });
-  tx();
+  try {
+    const tx = db.transaction(() => {
+      deletePair(existing);
+      createTx({ ...req.body, cleared: req.body.cleared ?? !!existing.cleared }, { keepId, keepPair });
+    });
+    tx();
+  } catch (e) {
+    return bad(res, e.message);
+  }
   res.json({ ok: true });
 });
 
@@ -809,6 +828,7 @@ api.put("/category-groups/:id", (req, res) => {
   if (!g) return bad(res, "not found");
   const name = (req.body?.name ?? g.name).trim();
   const hidden = typeof req.body?.hidden === "boolean" ? (req.body.hidden ? 1 : 0) : g.hidden;
+  if (hidden && g.is_income) return bad(res, "cannot hide income group");
   db.prepare("UPDATE category_groups SET name=?, hidden=? WHERE id=?").run(name || g.name, hidden, g.id);
   res.json({ ok: true });
 });

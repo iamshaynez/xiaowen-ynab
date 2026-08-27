@@ -185,6 +185,32 @@ export function ReportsPage() {
             </div>
           )}
         </Card>
+
+        {/* Income sources */}
+        <Card title={t("rep_incomeSources")}>
+          {data.incomeSources.length === 0 ? (
+            <EmptyChart />
+          ) : (
+            <div className="space-y-2 pt-1">
+              {data.incomeSources.map((p, i) => {
+                const max = data.incomeSources[0]?.value || 1;
+                const pct = Math.max((p.value / max) * 100, 4);
+                return (
+                  <div key={i} className="group relative overflow-hidden rounded-lg bg-emerald-50/60 px-3 py-2">
+                    <div
+                      className="absolute inset-y-0 left-0 bg-gradient-to-r from-emerald-100 to-transparent transition-all"
+                      style={{ width: `${pct}%` }}
+                    />
+                    <div className="relative flex items-center justify-between">
+                      <span className="truncate pr-3 text-[13px] font-medium text-slate-700">{p.name}</span>
+                      <span className="num text-[13px] font-semibold text-emerald-700">{fmtMoney(p.value)}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </Card>
       </div>
     </div>
   );

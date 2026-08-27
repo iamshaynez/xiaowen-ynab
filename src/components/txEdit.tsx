@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowDownLeft, ArrowUpRight } from "lucide-react";
 import { useApp } from "../store";
 import { parseAmountToCents, todayIso } from "../format";
+import type { CategoryGroup } from "../types";
 
 export interface FormState {
   date: string;
@@ -136,6 +137,7 @@ export function CategorySelect({
 }) {
   const { boot, t } = useApp();
   const groups = (boot?.groups ?? []).filter((g) => g.categories.length > 0);
+  const incomeFirst = [...groups.filter((g) => g.is_income), ...groups.filter((g) => !g.is_income)];
   return (
     <select
       disabled={disabled}
@@ -144,7 +146,7 @@ export function CategorySelect({
       className={`${compact ? "max-w-[150px] truncate" : ""} w-full rounded-md border border-transparent bg-transparent px-2 py-1 text-[13px] outline-none transition-colors disabled:text-slate-300 focus:border-brand-400 focus:bg-white focus:ring-2 focus:ring-brand-100`}
     >
       <option value="">{t("tx_uncategorized")}</option>
-      {groups.map((g) => (
+      {incomeFirst.map((g) => (
         <optgroup key={g.id} label={g.name}>
           {g.categories.map((c) => (
             <option key={c.id} value={c.id}>
@@ -155,6 +157,16 @@ export function CategorySelect({
       ))}
     </select>
   );
+}
+
+// 计算默认收入来源分类：优先「其他收入」，否则收入组的第一个分类。
+export function defaultIncomeCategory(groups: CategoryGroup[]): string {
+  const income = groups.filter((g) => g.is_income).flatMap((g) => g.categories);
+  return income.find((c) => c.name === "其他收入")?.id ?? income[0]?.id ?? "";
+}
+
+export function incomeCategoryIds(groups: CategoryGroup[]): Set<string> {
+  return new Set(groups.filter((g) => g.is_income).flatMap((g) => g.categories.map((c) => c.id)));
 }
 
 export function AmountInput({

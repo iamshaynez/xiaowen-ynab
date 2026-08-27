@@ -42,6 +42,7 @@ export interface CategoryGroup {
   name: string;
   sort_order: number;
   hidden: 0 | 1;
+  is_income: 0 | 1;
   categories: Category[];
 }
 
@@ -124,6 +125,7 @@ export interface ReportsData {
   netWorthNow: number;
   breakdown: { name: string; value: number }[];
   topPayees: { name: string; value: number }[];
+  incomeSources: { name: string; value: number }[];
   ageOfMoney: number;
 }
 
