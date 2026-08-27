@@ -302,7 +302,7 @@ export function reportsOverview(countMonths = 12) {
     if (t.amount < 0) {
       if (t.category_id) breakdown.set(t.category_id, (breakdown.get(t.category_id) || 0) - t.amount);
       const p = (t.payee_name || "").trim();
-      if (p && p !== "__starting__") payeeMap.set(p, (payeeMap.get(p) || 0) - t.amount);
+      if (p && p !== "__starting__" && p !== "__reconciling__") payeeMap.set(p, (payeeMap.get(p) || 0) - t.amount);
     } else if (t.category_id && incomeCatIds.has(t.category_id)) {
       incomeSourceMap.set(t.category_id, (incomeSourceMap.get(t.category_id) || 0) + t.amount);
     }

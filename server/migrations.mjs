@@ -229,4 +229,14 @@ CREATE INDEX IF NOT EXISTS idx_chat_sessions_channel_lookup ON chat_sessions(cha
       ).run(otherIncomeId);
     },
   },
+  {
+    // 对账完成功能：
+    //  - is_reconcile_adjustment 标记差额兜底流水（对账输入实际余额与计算余额不等时自动创建），
+    //    该类流水 category_id 为 NULL —— 影响未分配（Ready to Assign），但不计入「未分类」提醒。
+    version: 6,
+    name: "reconcile-flag",
+    up: (db) => {
+      db.exec("ALTER TABLE transactions ADD COLUMN is_reconcile_adjustment INTEGER NOT NULL DEFAULT 0");
+    },
+  },
 ];

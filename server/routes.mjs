@@ -473,7 +473,7 @@ function budgetPayload(month) {
     .prepare(
       `SELECT COUNT(*) c FROM transactions t JOIN accounts a ON a.id=t.account_id
        WHERE a.on_budget=1 AND t.category_id IS NULL AND t.transfer_account_id IS NULL
-         AND t.is_start=0 AND substr(t.date,1,7)<=?`
+         AND t.is_start=0 AND t.is_reconcile_adjustment=0 AND substr(t.date,1,7)<=?`
     )
     .get(month).c;
 
@@ -661,7 +661,7 @@ function transformTx(r) {
     id: r.id,
     accountId: r.account_id,
     date: r.date,
-    payeeName: r.payee_name === "__starting__" ? null : r.payee_name,
+    payeeName: r.payee_name === "__starting__" || r.payee_name === "__reconciling__" ? null : r.payee_name,
     isStart: !!r.is_start,
     transferAccountId: r.transfer_account_id,
     otherAccountName: r.other_account_name,
@@ -690,7 +690,7 @@ api.get("/transactions", (req, res) => {
     const like = `%${search}%`;
     args.push(like, like, like);
   }
-  if (uncategorized === "1") where += " AND t.category_id IS NULL AND t.transfer_account_id IS NULL";
+  if (uncategorized === "1") where += " AND t.category_id IS NULL AND t.transfer_account_id IS NULL AND t.is_reconcile_adjustment=0";
   if (accountId) {
     where += " AND t.account_id=?";
     args.push(String(accountId));
@@ -869,9 +869,43 @@ api.patch("/transactions/:id/cleared", (req, res) => {
   res.json({ ok: true });
 });
 
+// 对账完成：以银行/现实的「实际余额」与当前计算余额比对；
+// 不一致时自动创建一条差额流水兜底抹平 —— category_id 留空使其影响未分配（Ready to Assign），
+// is_reconcile_adjustment=1 使其不计入「未分类」提醒；随后把已清算流水锁定为已对账。
 api.post("/reconcile/:accountId", (req, res) => {
-  db.prepare("UPDATE transactions SET reconciled=1, cleared=1 WHERE account_id=? AND cleared=1").run(req.params.accountId);
-  res.json({ ok: true });
+  const acc = db.prepare("SELECT * FROM accounts WHERE id=?").get(req.params.accountId);
+  if (!acc) return bad(res, "not found");
+  const body = req.body || {};
+  let statement;
+  if (body.statementBalance !== undefined && body.statementBalance !== null && body.statementBalance !== "") {
+    statement = Math.round(Number(body.statementBalance));
+    if (!Number.isFinite(statement)) return bad(res, "invalid statement balance");
+  }
+  const markCleared = !!body.markCleared;
+  let adjustment = null;
+  const run = db.transaction(() => {
+    if (statement !== undefined) {
+      const calc =
+        acc.starting_balance +
+        db.prepare("SELECT COALESCE(SUM(amount),0) s FROM transactions WHERE account_id=? AND is_start=0").get(acc.id).s;
+      if (statement !== calc) {
+        adjustment = statement - calc;
+        db.prepare(
+          `INSERT INTO transactions(id,account_id,date,payee_name,memo,amount,cleared,reconciled,is_start,is_reconcile_adjustment,created_at)
+           VALUES(?,?,?,?,?,?,1,1,0,1,?)`
+        ).run(uid(), acc.id, todayYmd(), "__reconciling__", "", adjustment, nowIso());
+      }
+    }
+    if (markCleared) {
+      // 只补勾非转账行：转账涉及对侧账户状态，留给用户自行确认
+      db.prepare(
+        "UPDATE transactions SET cleared=1 WHERE account_id=? AND cleared=0 AND is_start=0 AND transfer_account_id IS NULL"
+      ).run(acc.id);
+    }
+    db.prepare("UPDATE transactions SET reconciled=1 WHERE account_id=? AND cleared=1").run(acc.id);
+  });
+  run();
+  res.json({ ok: true, adjustment });
 });
 
 api.get("/categories", (req, res) => {
