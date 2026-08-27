@@ -235,7 +235,7 @@ export function loadDemoData() {
       assign.run(m, cats["旅行基金"], yuan(700));
       assign.run(m, cats["医疗健康"], yuan(100));
 
-      addTx(accounts.bank, D(10), "公司发薪", yuan(12800 + Math.floor(rand() * 600)), null, "工资入账");
+      addTx(accounts.bank, D(10), "公司发薪", yuan(12800 + Math.floor(rand() * 600)), cats["工资薪酬"] ?? null, "工资入账");
 
       addTx(accounts.bank, D(1), "房东张女士", -yuan(4200), cats["房租房贷"]);
       addTx(accounts.bank, D(16), "供电局", -yuan(120 + rand() * 160), cats["水电燃气"]);

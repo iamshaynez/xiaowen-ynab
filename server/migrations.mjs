@@ -4,6 +4,8 @@
 //  - version 必须严格递增；每个迁移在事务内执行，成功后写入 schema_migrations。
 //  - up() 里尽量写成幂等或一次性变更；基线迁移用 IF NOT EXISTS 以兼容旧库。
 
+import crypto from "node:crypto";
+
 export const migrations = [
   {
     version: 1,
@@ -184,6 +186,47 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_chat_sessions_channel ON chat_sessions(cha
 DROP INDEX IF EXISTS idx_chat_sessions_channel;
 CREATE INDEX IF NOT EXISTS idx_chat_sessions_channel_lookup ON chat_sessions(channel, external_id);
 `);
+    },
+  },
+  {
+    // 收入分类体系（方案 B）：
+    //  - category_groups 增加 is_income 标志；
+    //  - 种子「收入」组与常用收入来源分类；若用户已有同名组则收编（置标志、补分类），不重复建组；
+    //  - 存量按旧约定记录的收入（category_id IS NULL AND amount>0 的非期初、非转账行）
+    //    迁移到「其他收入」，让 NULL 回归纯粹的“未分类待处理”语义。
+    version: 5,
+    name: "income-categories",
+    up: (db) => {
+      db.exec("ALTER TABLE category_groups ADD COLUMN is_income INTEGER NOT NULL DEFAULT 0");
+
+      const INCOME_GROUP = "收入";
+      const INCOME_CATS = ["工资薪酬", "奖金", "理财收益", "红包礼金", "其他收入"];
+      let gid;
+      const existing = db.prepare("SELECT id FROM category_groups WHERE name=?").get(INCOME_GROUP);
+      if (existing) {
+        gid = existing.id;
+        db.prepare("UPDATE category_groups SET is_income=1 WHERE id=?").run(gid);
+      } else {
+        gid = crypto.randomUUID();
+        const minOrder = db.prepare("SELECT COALESCE(MIN(sort_order),0) m FROM category_groups").get().m;
+        db.prepare("INSERT INTO category_groups(id,name,sort_order,is_income) VALUES(?,?,?,1)").run(gid, INCOME_GROUP, minOrder - 1);
+      }
+
+      const insC = db.prepare("INSERT INTO categories(id,group_id,name,sort_order) VALUES(?,?,?,?)");
+      const maxOrder = () => db.prepare("SELECT COALESCE(MAX(sort_order),-1) m FROM categories WHERE group_id=?").get(gid).m;
+      let order = maxOrder();
+      for (const name of INCOME_CATS) {
+        const has = db.prepare("SELECT 1 FROM categories WHERE group_id=? AND name=?").get(gid, name);
+        if (!has) insC.run(crypto.randomUUID(), gid, name, ++order);
+      }
+
+      const otherIncomeId = db
+        .prepare("SELECT id FROM categories WHERE group_id=? AND name='其他收入'")
+        .get(gid).id;
+      db.prepare(
+        `UPDATE transactions SET category_id=?
+          WHERE category_id IS NULL AND amount>0 AND is_start=0 AND transfer_account_id IS NULL`
+      ).run(otherIncomeId);
     },
   },
 ];
