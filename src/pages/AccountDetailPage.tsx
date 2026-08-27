@@ -252,7 +252,7 @@ function HeaderName({ name, onSave }: { name: string; onSave: (n: string) => voi
 
 /* ------------------------- Form row ------------------------- */
 
-const gridCls = "grid grid-cols-[34px_110px_minmax(140px,1fr)_minmax(130px,1fr)_minmax(90px,1fr)_90px_90px_100px] items-center gap-x-1";
+const gridCls = "grid grid-cols-[34px_110px_minmax(140px,1fr)_minmax(130px,1fr)_minmax(90px,1fr)_128px_128px_140px] items-center gap-x-1";
 
 function TxFormRow({
   form,
