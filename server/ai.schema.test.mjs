@@ -6,7 +6,7 @@ import path from "node:path";
 
 process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "ynab-schema-test-"));
 
-const { db } = await import("./db.mjs");
+const { db, setSetting } = await import("./db.mjs");
 const { buildSchemaDoc, buildSystemPrompt } = await import("./ai.mjs");
 
 describe("buildSchemaDoc：从数据库动态内省 schema", () => {
@@ -57,5 +57,21 @@ describe("buildSchemaDoc：从数据库动态内省 schema", () => {
     expect(prompt).toContain("「分」");
     expect(prompt).toContain("两条腿");
     expect(prompt).toContain("chat_messages");
+  });
+
+  it("未配置额外提示词时系统提示词不含自定义上下文段", () => {
+    setSetting("ai_extra_prompt", "");
+    const prompt = buildSystemPrompt();
+    expect(prompt).not.toContain("用户自定义上下文");
+  });
+
+  it("配置额外提示词后系统提示词嵌入用户自定义上下文", () => {
+    const extra = "我是小王，常用的转账对方是房东张女士，工资每月 10 号入账。";
+    setSetting("ai_extra_prompt", extra);
+    const prompt = buildSystemPrompt();
+    expect(prompt).toContain("用户自定义上下文");
+    expect(prompt).toContain(extra);
+    // 清理，避免污染其它用例
+    setSetting("ai_extra_prompt", "");
   });
 });

@@ -6,6 +6,8 @@ export interface Settings {
   aiBaseUrl: string;
   aiModel: string;
   aiKey: string;
+  /** 额外提示词：嵌入智能助手（含 IM）的系统提示词，供用户补充自定义上下文 */
+  aiExtraPrompt: string;
   /** 备份：每日定时 + Cloudflare R2 (S3 兼容) 远端 */
   backupEnabled: boolean;
   backupCronTime: string;
