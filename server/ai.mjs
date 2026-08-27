@@ -114,7 +114,9 @@ ${buildSchemaDoc()}
 # 关键业务语义（固定不变，与上面的实时 Schema 配合理解）
 - 账户余额 = starting_balance + SUM(transactions.amount WHERE is_start=0)；is_start=1 的行是期初余额，禁止修改或删除。
 - 账户间转账 = 两条腿：源账户 amount 为负、目标账户 amount 为正，两行 transfer_account_id 互指对方、pair_id 相同、备注一致。目标腿 payee_name 为空串。绝不能只插入一条腿。
-- 预算内账户之间互转 category_id 必须为 NULL，不影响预算；只有带 category_id 的交易才影响分类活动；无分类的正向流入计入 Ready to Assign。
+- 预算内账户之间互转 category_id 必须为 NULL，不影响预算；只有带 category_id 的交易才影响分类活动。
+- 收入分类：category_groups.is_income=1 的分组下的分类是「收入来源」（如工资薪酬、奖金、理财收益、其他收入）。正数金额 + 收入分类 = 计入 Ready to Assign（待分配），并作为收入来源统计；收入分类不接受负金额（负数应记录在支出分类或退款原分类）。
+- 无分类的正向流入也计入 Ready to Assign（旧约定兜底）；无分类的负向流出计入「未分类支出」。退款/报销记回原支出分类，会抵减该分类支出、不计入收入。
 - 信用卡消费：category_id 写实际消费分类（不要写任何 cc: 分类），系统会自动把额度转移到还款科目；信用卡余额为负代表欠款。
 - 向信用卡转账=还款：transfer_account_id 指向该卡、amount 为负（从付款账户看）。
 - assignments 的 category_id 也可以是合成 id 'cc:<account_uuid>'，表示给某张信用卡的还款科目分配金额。

@@ -5,6 +5,7 @@ import { BudgetPage } from "./pages/BudgetPage";
 import { AccountsPage } from "./pages/AccountsPage";
 import { AccountDetailPage } from "./pages/AccountDetailPage";
 import { ReportsPage } from "./pages/ReportsPage";
+import { TransactionsPage } from "./pages/TransactionsPage";
 import { ChatPage } from "./pages/ChatPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { LoginPage } from "./pages/LoginPage";
@@ -41,6 +42,7 @@ function Shell() {
   const detail = route.match(/^#\/accounts\/([\w-]+)$/);
   if (detail) page = <AccountDetailPage id={detail[1]} />;
   else if (route.startsWith("#/accounts")) page = <AccountsPage />;
+  else if (route.startsWith("#/transactions")) page = <TransactionsPage />;
   else if (route.startsWith("#/reports")) page = <ReportsPage />;
   else if (route.startsWith("#/chat")) page = <ChatPage />;
   else if (route.startsWith("#/settings")) page = <SettingsPage />;

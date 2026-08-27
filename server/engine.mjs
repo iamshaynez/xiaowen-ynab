@@ -68,13 +68,20 @@ export function computeBudget(uptoMonth) {
   }
 
   const realCats = db.prepare("SELECT id FROM categories").all().map((r) => r.id);
+  const incomeCats = new Set(
+    db
+      .prepare("SELECT c.id FROM categories c JOIN category_groups g ON g.id=c.group_id WHERE g.is_income=1")
+      .all()
+      .map((r) => r.id)
+  );
+  const budgetCats = realCats.filter((id) => !incomeCats.has(id));
   const ccAccounts = db
     .prepare("SELECT id FROM accounts WHERE type IN ('creditCard','lineOfCredit') AND on_budget=1")
     .all()
     .map((r) => r.id);
 
   const catIds = () => {
-    const s = new Set(realCats);
+    const s = new Set(budgetCats);
     for (const c of ccAccounts) s.add(`cc:${c}`);
     return s;
   };
@@ -111,6 +118,11 @@ export function computeBudget(uptoMonth) {
       if (t.category_id == null) {
         if (t.amount > 0) inflow += t.amount;
         else uncatOutflow += -t.amount;
+        continue;
+      }
+      if (incomeCats.has(t.category_id)) {
+        inflow += t.amount;
+        activity.set(t.category_id, (activity.get(t.category_id) || 0) + t.amount);
         continue;
       }
       activity.set(t.category_id, (activity.get(t.category_id) || 0) + t.amount);
@@ -246,13 +258,21 @@ export function reportsOverview(countMonths = 12) {
     expenseByM.set(m, 0);
   }
 
+  const incomeCatIds = new Set(
+    db
+      .prepare("SELECT c.id FROM categories c JOIN category_groups g ON g.id=c.group_id WHERE g.is_income=1")
+      .all()
+      .map((r) => r.id)
+  );
+  const isIncome = (catId) => (catId ? incomeCatIds.has(catId) : true);
+
   for (const t of txRows) {
     if (!t.ob || t.is_start) continue;
     const m = t.date.slice(0, 7);
     if (!incomeByM.has(m)) continue;
     if (t.transfer_account_id) continue;
-    if (t.amount > 0) incomeByM.set(m, incomeByM.get(m) + t.amount);
-    else expenseByM.set(m, expenseByM.get(m) - t.amount);
+    if (isIncome(t.category_id)) incomeByM.set(m, incomeByM.get(m) + t.amount);
+    else if (t.amount < 0) expenseByM.set(m, expenseByM.get(m) - t.amount);
   }
 
   const netWorth = [];
@@ -273,6 +293,7 @@ export function reportsOverview(countMonths = 12) {
   const firstM = months[0];
   const breakdown = new Map();
   const payeeMap = new Map();
+  const incomeSourceMap = new Map();
   const catNames = new Map(db.prepare("SELECT id,name FROM categories").all().map((r) => [r.id, r.name]));
   for (const t of txRows) {
     if (!t.ob || t.is_start || t.transfer_account_id) continue;
@@ -282,6 +303,8 @@ export function reportsOverview(countMonths = 12) {
       if (t.category_id) breakdown.set(t.category_id, (breakdown.get(t.category_id) || 0) - t.amount);
       const p = (t.payee_name || "").trim();
       if (p && p !== "__starting__") payeeMap.set(p, (payeeMap.get(p) || 0) - t.amount);
+    } else if (t.category_id && incomeCatIds.has(t.category_id)) {
+      incomeSourceMap.set(t.category_id, (incomeSourceMap.get(t.category_id) || 0) + t.amount);
     }
   }
 
@@ -302,6 +325,9 @@ export function reportsOverview(countMonths = 12) {
       .map(([name, value]) => ({ name, value }))
       .sort((x, y) => y.value - x.value)
       .slice(0, 8),
+    incomeSources: [...incomeSourceMap.entries()]
+      .map(([id, value]) => ({ name: catNames.get(id) || id, value }))
+      .sort((x, y) => y.value - x.value),
     ageOfMoney: ageOfMoney(),
   };
 }

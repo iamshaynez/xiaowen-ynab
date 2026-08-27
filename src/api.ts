@@ -110,12 +110,15 @@ export const api = {
     req<{ account: Account & { balance: number }; transactions: Tx[] }>(`/api/accounts/${id}/transactions`),
   reconcile: (accountId: string) => req<{ ok: true }>(`/api/reconcile/${accountId}`, { method: "POST" }),
 
-  transactions: (params: { search?: string; uncategorized?: boolean }) => {
+  transactions: (params: { search?: string; uncategorized?: boolean; accountId?: string; limit?: number; offset?: number }) => {
     const q = new URLSearchParams();
     if (params.search) q.set("search", params.search);
     if (params.uncategorized) q.set("uncategorized", "1");
+    if (params.accountId) q.set("accountId", params.accountId);
+    if (params.limit !== undefined) q.set("limit", String(params.limit));
+    if (params.offset !== undefined) q.set("offset", String(params.offset));
     const qs = q.toString();
-    return req<{ transactions: Tx[] }>(`/api/transactions${qs ? `?${qs}` : ""}`);
+    return req<{ transactions: Tx[]; total: number }>(`/api/transactions${qs ? `?${qs}` : ""}`);
   },
   createTx: (body: unknown) => req<{ ok: true }>("/api/transactions", { method: "POST", body: JSON.stringify(body) }),
   updateTx: (id: string, body: unknown) =>
@@ -123,6 +126,18 @@ export const api = {
   deleteTx: (id: string) => req<{ ok: true }>(`/api/transactions/${id}`, { method: "DELETE" }),
   setTxStatus: (id: string, cleared: number) =>
     req<{ ok: true }>(`/api/transactions/${id}/cleared`, { method: "PATCH", body: JSON.stringify({ cleared }) }),
+  setTxCategory: (id: string, categoryId: string | null) =>
+    req<{ ok: true }>(`/api/transactions/${id}/category`, { method: "PATCH", body: JSON.stringify({ categoryId }) }),
+  bulkSetCategory: (ids: string[], categoryId: string | null) =>
+    req<{ ok: true; changed: number }>("/api/transactions/bulk-category", {
+      method: "POST",
+      body: JSON.stringify({ ids, categoryId }),
+    }),
+  bulkDeleteTx: (ids: string[]) =>
+    req<{ ok: true; changed: number }>("/api/transactions/bulk-delete", {
+      method: "POST",
+      body: JSON.stringify({ ids }),
+    }),
 
   addGroup: (name: string) => req<{ id: string }>("/api/category-groups", { method: "POST", body: JSON.stringify({ name }) }),
   renameGroup: (id: string, name: string) =>
