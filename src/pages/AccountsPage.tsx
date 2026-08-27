@@ -7,19 +7,19 @@ import { Btn, Field, Modal, inputCls } from "../components/ui";
 import { accountIcon } from "../components/Sidebar";
 import type { Account } from "../types";
 
-export const ACCOUNT_TYPE_LABELS: Record<string, { zh: string; en: string }> = {
-  checking: { zh: "支票账户", en: "Checking" },
-  savings: { zh: "储蓄账户", en: "Savings" },
-  cash: { zh: "现金", en: "Cash" },
-  creditCard: { zh: "信用卡", en: "Credit Card" },
-  lineOfCredit: { zh: "信用额度", en: "Line of Credit" },
-  investment: { zh: "投资账户", en: "Investment" },
-  property: { zh: "房产", en: "Property" },
-  vehicle: { zh: "车辆", en: "Vehicle" },
-  otherAsset: { zh: "其他资产", en: "Other Asset" },
-  studentLoan: { zh: "助学贷款", en: "Student Loan" },
-  personalLoan: { zh: "个人贷款", en: "Personal Loan" },
-  otherLiability: { zh: "其他负债", en: "Other Liability" },
+export const ACCOUNT_TYPE_LABELS: Record<string, { zh: string; en: string; onBudget: number }> = {
+  checking: { zh: "支票账户", en: "Checking", onBudget: 1 },
+  savings: { zh: "储蓄账户", en: "Savings", onBudget: 1 },
+  cash: { zh: "现金", en: "Cash", onBudget: 1 },
+  creditCard: { zh: "信用卡", en: "Credit Card", onBudget: 1 },
+  lineOfCredit: { zh: "信用额度", en: "Line of Credit", onBudget: 0 },
+  investment: { zh: "投资账户", en: "Investment", onBudget: 0 },
+  property: { zh: "房产", en: "Property", onBudget: 0 },
+  vehicle: { zh: "车辆", en: "Vehicle", onBudget: 0 },
+  otherAsset: { zh: "其他资产", en: "Other Asset", onBudget: 0 },
+  studentLoan: { zh: "助学贷款", en: "Student Loan", onBudget: 0 },
+  personalLoan: { zh: "个人贷款", en: "Personal Loan", onBudget: 0 },
+  otherLiability: { zh: "其他负债", en: "Other Liability", onBudget: 0 },
 };
 
 function AccountCard({ acc }: { acc: Account }) {
@@ -126,7 +126,7 @@ export function AccountsPage() {
               <select className={inputCls} value={type} onChange={(e) => setType(e.target.value)}>
                 {Object.entries(ACCOUNT_TYPE_LABELS).map(([k, v]) => (
                   <option key={k} value={k}>
-                    {v[lang]}
+                    {v[lang]} · {t(v.onBudget ? "account_tagOnBudget" : "account_tagOffBudget")}
                   </option>
                 ))}
               </select>
