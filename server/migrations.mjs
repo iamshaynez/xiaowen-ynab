@@ -239,4 +239,12 @@ CREATE INDEX IF NOT EXISTS idx_chat_sessions_channel_lookup ON chat_sessions(cha
       db.exec("ALTER TABLE transactions ADD COLUMN is_reconcile_adjustment INTEGER NOT NULL DEFAULT 0");
     },
   },
+  {
+    // 分类备注：每个预算分类附带一段长文本备注（YNAB 式 note），在预算页右侧检查器中维护。
+    version: 7,
+    name: "category-note",
+    up: (db) => {
+      db.exec("ALTER TABLE categories ADD COLUMN note TEXT NOT NULL DEFAULT ''");
+    },
+  },
 ];
