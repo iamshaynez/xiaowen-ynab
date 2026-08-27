@@ -5,6 +5,7 @@ import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import { api } from "./routes.mjs";
 import { syncChannels } from "./im/index.mjs";
+import { syncBackupScheduler } from "./backup.scheduler.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -31,4 +32,6 @@ app.listen(PORT, () => {
   console.log(`[xiaowen-budget] API listening on http://localhost:${PORT}`);
   // 启动已启用的 IM 渠道（Telegram 长轮询等）
   syncChannels();
+  // 启动每日备份调度器（若已在设置中启用）
+  syncBackupScheduler();
 });

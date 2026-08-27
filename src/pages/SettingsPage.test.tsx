@@ -14,6 +14,8 @@ const h = vi.hoisted(() => ({
   wechatLoginState: vi.fn(),
   submitWechatVerifyCode: vi.fn(),
   cancelWechatLogin: vi.fn(),
+  runBackup: vi.fn(),
+  testBackup: vi.fn(),
   setLang: vi.fn(),
   refreshBoot: vi.fn(),
   toast: vi.fn(),
@@ -32,6 +34,8 @@ vi.mock("../api", () => ({
     wechatLoginState: (...a: unknown[]) => h.wechatLoginState(...a),
     submitWechatVerifyCode: (...a: unknown[]) => h.submitWechatVerifyCode(...a),
     cancelWechatLogin: (...a: unknown[]) => h.cancelWechatLogin(...a),
+    runBackup: (...a: unknown[]) => h.runBackup(...a),
+    testBackup: (...a: unknown[]) => h.testBackup(...a),
   },
 }));
 
@@ -44,12 +48,22 @@ vi.mock("../store", () => ({
         aiBaseUrl: "https://api.deepseek.com/v1",
         aiModel: "deepseek-chat",
         aiKey: "sk-test",
+        backupEnabled: true,
+        backupCronTime: "04:30",
+        backupR2Endpoint: "https://acct.r2.cloudflarestorage.com",
+        backupR2Bucket: "my-bucket",
+        backupR2Prefix: "pre",
+        backupR2AccessKeyId: "AKID-1",
+        backupR2HasSecret: true,
+        backupLastRunAt: "2026-08-27T03:00:05.000Z",
+        backupLastResult: "ok",
       },
       accounts: [],
     },
     loading: false,
     lang: "zh",
-    t: (k: string) => k,
+    t: (k: string, v?: Record<string, string | number>) =>
+      v ? `${k}:${JSON.stringify(v)}` : k,
     setLang: h.setLang,
     refreshBoot: h.refreshBoot,
     toast: h.toast,
@@ -189,5 +203,44 @@ describe("SettingsPage", () => {
     render(<SettingsPage />);
     expect(await screen.findByText("settings_notBound")).toBeTruthy();
     expect(await screen.findByText(/wx-user-9/)).toBeTruthy();
+  });
+
+  it("备份卡片：预填当前配置，密钥留空仅作占位", async () => {
+    render(<SettingsPage />);
+    const time = (await screen.findByLabelText("settings_backupTime")) as HTMLInputElement;
+    expect(time.value).toBe("04:30");
+    expect(screen.getByDisplayValue("https://acct.r2.cloudflarestorage.com")).toBeTruthy();
+    expect(screen.getByDisplayValue("my-bucket")).toBeTruthy();
+    expect(screen.getByDisplayValue("AKID-1")).toBeTruthy();
+    const secret = screen.getByLabelText("settings_backupSecretKey") as HTMLInputElement;
+    expect(secret.value).toBe("");
+    const enable = screen.getByLabelText("settings_backupEnable") as HTMLInputElement;
+    expect(enable.checked).toBe(true);
+  });
+
+  it("保存备份设置：提交当前表单值，密钥为空字符串（保持不变）", async () => {
+    h.saveSettings.mockResolvedValue({ ok: true });
+    render(<SettingsPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "backup_save" }));
+    await waitFor(() =>
+      expect(h.saveSettings).toHaveBeenCalledWith(
+        expect.objectContaining({
+          backupEnabled: true,
+          backupCronTime: "04:30",
+          backupR2Endpoint: "https://acct.r2.cloudflarestorage.com",
+          backupR2Bucket: "my-bucket",
+          backupR2AccessKeyId: "AKID-1",
+          backupR2SecretKey: "",
+        })
+      )
+    );
+  });
+
+  it("立即备份调用 runBackup 并刷新状态", async () => {
+    h.runBackup.mockResolvedValue({ ok: true, file: "budget-x.sql.gz", bytes: 1, uploaded: true });
+    render(<SettingsPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "backup_run" }));
+    await waitFor(() => expect(h.runBackup).toHaveBeenCalled());
+    await waitFor(() => expect(h.refreshBoot).toHaveBeenCalled());
   });
 });

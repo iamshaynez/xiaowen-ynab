@@ -49,6 +49,12 @@ Xiaowen Budget is zero-based budgeting software that runs entirely on your own m
 - Multi-session management, write confirmations that survive restarts, resumable message cursors so no message is lost
 - Approve or reject pending writes right from chat ("confirm" / "cancel"); `/new` starts a fresh session
 
+### Daily Backup
+- Automatic SQLite backup (online snapshot + gzip) at a fixed time every day, without locking the database
+- Works with any S3-compatible object storage (e.g. **Cloudflare R2**) via built-in SigV4 signing — no extra dependencies
+- Keeps the latest 7 versions locally under `data/backups/` and on the remote, older ones roll over
+- Manual "back up now" and remote connection test; missed schedules are caught up automatically after restart
+
 ### Misc
 - Optional password login (JWT issued; constant-time comparison to prevent timing side channels)
 - English / Simplified Chinese UI with a custom currency symbol
