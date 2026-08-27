@@ -49,6 +49,9 @@ Node 20+ is required. Use `npm ci` in CI and `npm install` locally.
 │   └── *.test.mjs      # Colocated server tests (Vitest)
 ├── data/               # SQLite database files (do NOT commit the db)
 ├── dist/               # Production build output (generated)
+├── README.md           # 中文 README
+├── README.en.md        # English README (links to README.md)
+├── LICENSE             # MIT license
 ├── vite.config.ts      # Frontend dev server + build
 ├── vitest.config.ts    # Test runner config
 └── package.json        # Scripts and dependencies
