@@ -93,8 +93,8 @@ export function AccountsPage() {
   };
 
   return (
-    <div className="mx-auto max-w-3xl px-6 py-8">
-      <div className="mb-7 flex items-center justify-between">
+    <div className="mx-auto max-w-3xl px-4 py-6 md:px-6 md:py-8">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3 md:mb-7">
         <div>
           <h1 className="text-xl font-bold text-slate-900">{t("nav_accounts")}</h1>
           <p className="mt-0.5 text-[13px] text-slate-400">{t("common_allAccounts")}</p>

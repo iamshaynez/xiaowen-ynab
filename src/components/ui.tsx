@@ -20,9 +20,9 @@ export function Modal({
   }, [onClose]);
 
   return (
-    <div className="anim-fade fixed inset-0 z-50 flex items-start justify-center bg-navy-950/40 pt-[12vh] backdrop-blur-[2px]" onMouseDown={onClose}>
+    <div className="anim-fade fixed inset-0 z-50 flex items-start justify-center bg-navy-950/40 px-3 pt-[10vh] backdrop-blur-[2px]" onMouseDown={onClose}>
       <div
-        className={`anim-pop w-full ${width} overflow-hidden rounded-2xl bg-white shadow-pop`}
+        className={`anim-pop max-h-[85vh] w-full ${width} overflow-y-auto rounded-2xl bg-white shadow-pop`}
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3.5">

@@ -202,7 +202,7 @@ export function TransactionsPage() {
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="border-b border-slate-200 bg-white px-6 pb-4 pt-5 shadow-card">
+      <div className="border-b border-slate-200 bg-white px-4 pb-4 pt-5 shadow-card md:px-6">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <h1 className="flex items-center gap-2 text-lg font-bold text-slate-900">
             <ListChecks size={20} className="text-brand-600" />
@@ -226,7 +226,7 @@ export function TransactionsPage() {
       </div>
 
       {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-3 px-6 pt-4">
+      <div className="flex flex-wrap items-center gap-3 px-4 pt-4 md:px-6">
         <div className="relative w-72">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input className={"pl-8 " + searchCls} placeholder={t("txp_search")} value={searchInput} onChange={(e) => setSearchInput(e.target.value)} />
@@ -257,7 +257,7 @@ export function TransactionsPage() {
 
       {/* Bulk bar */}
       {selected.size > 0 && (
-        <div className="anim-pop mx-6 mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-brand-200 bg-brand-50 px-4 py-2">
+        <div className="anim-pop mx-4 mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-brand-200 bg-brand-50 px-4 py-2 md:mx-6">
           <span className="text-[13px] font-semibold text-brand-700">{t("txp_selected", { n: selected.size })}</span>
           <div className="w-48">
             <CategorySelect value={bulkCat} onChange={setBulkCat} />
@@ -278,8 +278,8 @@ export function TransactionsPage() {
       )}
 
       {/* Table */}
-      <div className="min-h-0 flex-1 overflow-auto px-6 pb-10 pt-3">
-        <div className="overflow-visible rounded-xl border border-slate-200 bg-white shadow-card">
+      <div className="min-h-0 flex-1 overflow-auto px-4 pb-10 pt-3 md:px-6">
+        <div className="min-w-[980px] overflow-visible rounded-xl border border-slate-200 bg-white shadow-card">
           <div className={`${gridCls} border-b border-slate-100 bg-slate-50/80`}>
             <div className="px-2">
               <input type="checkbox" checked={allPageSelected} onChange={toggleSelectAll} title={t("txp_selectAll")} className="accent-brand-600" />
