@@ -409,7 +409,7 @@ export function TransactionsPage() {
 /* ------------------------- styles ------------------------- */
 
 const gridCls =
-  "grid grid-cols-[24px_34px_100px_110px_minmax(130px,1fr)_minmax(140px,1fr)_minmax(80px,1fr)_88px_88px_64px] items-center gap-x-1";
+  "grid grid-cols-[24px_34px_100px_110px_minmax(130px,1fr)_minmax(140px,1fr)_minmax(80px,1fr)_128px_128px_64px] items-center gap-x-1";
 const headCls = "px-2 py-2 text-left text-[11px] font-bold uppercase tracking-wide text-slate-400";
 const searchCls =
   "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-100";
