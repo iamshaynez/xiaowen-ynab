@@ -1,5 +1,5 @@
 // 隔离环境：必须在导入 db/engine 之前设置 DATA_DIR
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -62,5 +62,28 @@ describe("listMonths", () => {
     for (let i = 1; i < months.length; i++) {
       expect(months[i]).toBe(addMonths(months[i - 1], 1));
     }
+  });
+});
+
+describe("computeBudget：期初余额", () => {
+  beforeEach(() => {
+    db.prepare("DELETE FROM transactions").run();
+    db.prepare("DELETE FROM assignments").run();
+  });
+
+  it("预算内现金账户的期初余额计入 Ready to Assign", () => {
+    const acc = createAccount({ name: "储蓄", type: "checking", startingBalance: 50000, startingDate: `${currentMonth()}-01` });
+    const { byMonth } = computeBudget(currentMonth());
+    const s = byMonth.get(currentMonth());
+    expect(s.inflow).toBe(50000);
+    expect(s.readyToAssign).toBe(50000);
+  });
+
+  it("负债账户的负期初余额作为负流入扣减 Ready to Assign", () => {
+    const cc = createAccount({ name: "信用卡", type: "creditCard", startingBalance: -2000, startingDate: `${currentMonth()}-01` });
+    const { byMonth } = computeBudget(currentMonth());
+    const s = byMonth.get(currentMonth());
+    expect(s.inflow).toBe(-2000);
+    expect(s.readyToAssign).toBe(-2000);
   });
 });
