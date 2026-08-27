@@ -6,6 +6,17 @@ export interface Settings {
   aiBaseUrl: string;
   aiModel: string;
   aiKey: string;
+  /** 备份：每日定时 + Cloudflare R2 (S3 兼容) 远端 */
+  backupEnabled: boolean;
+  backupCronTime: string;
+  backupR2Endpoint: string;
+  backupR2Bucket: string;
+  backupR2Prefix: string;
+  backupR2AccessKeyId: string;
+  /** 密钥不回传，仅返回是否已配置 */
+  backupR2HasSecret: boolean;
+  backupLastRunAt: string | null;
+  backupLastResult: string | null;
 }
 
 export interface Account {

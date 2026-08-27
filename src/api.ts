@@ -40,9 +40,27 @@ export const api = {
 
   bootstrap: () => req<Bootstrap>("/api/bootstrap"),
   loadDemo: () => req<{ ok: true }>("/api/demo", { method: "POST" }),
-  saveSettings: (body: { currencySymbol?: string; language?: string; aiBaseUrl?: string; aiModel?: string; aiKey?: string }) =>
-    req<{ ok: true }>("/api/settings", { method: "PUT", body: JSON.stringify(body) }),
+  saveSettings: (body: {
+    currencySymbol?: string;
+    language?: string;
+    aiBaseUrl?: string;
+    aiModel?: string;
+    aiKey?: string;
+    backupEnabled?: boolean;
+    backupCronTime?: string;
+    backupR2Endpoint?: string;
+    backupR2Bucket?: string;
+    backupR2Prefix?: string;
+    backupR2AccessKeyId?: string;
+    backupR2SecretKey?: string;
+  }) => req<{ ok: true }>("/api/settings", { method: "PUT", body: JSON.stringify(body) }),
   aiTest: () => req<{ ok: true; model?: string }>("/api/ai/test", { method: "POST" }),
+
+  runBackup: () =>
+    req<{ ok: true; file: string; bytes: number; uploaded: boolean } | { error: string }>("/api/backup/run", {
+      method: "POST",
+    }),
+  testBackup: () => req<{ ok: true } | { error: string }>("/api/backup/test", { method: "POST" }),
 
   imChannels: () => req<{ channels: ImChannel[] }>("/api/im/channels"),
   createImChannel: (body: ImChannelInput) =>

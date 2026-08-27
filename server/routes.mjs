@@ -47,6 +47,9 @@ import {
   stopWechatLogin,
 } from "./im/wechat.mjs";
 import { isAuthEnabled, verifyPassword, signToken, requireAuth } from "./auth.mjs";
+import { runBackupNow, s3ConfigFromSettings } from "./backup.mjs";
+import { syncBackupScheduler, readBackupSettings } from "./backup.scheduler.mjs";
+import { s3ListObjects } from "./s3.mjs";
 
 export const api = express.Router();
 
@@ -90,6 +93,7 @@ api.get("/bootstrap", (req, res) => {
       aiBaseUrl: getSetting("ai_base_url", "https://api.openai.com/v1"),
       aiModel: getSetting("ai_model", "gpt-4o-mini"),
       aiKey: getSetting("ai_key", ""),
+      ...readBackupSettings(),
     },
     accounts: accountsWithBalances(),
     payees: db
@@ -110,22 +114,82 @@ api.get("/settings", (req, res) => {
     aiBaseUrl: getSetting("ai_base_url", "https://api.openai.com/v1"),
     aiModel: getSetting("ai_model", "gpt-4o-mini"),
     aiKey: getSetting("ai_key", ""),
+    ...readBackupSettings(),
   });
 });
 
 api.put("/settings", (req, res) => {
-  const { currencySymbol, language, aiBaseUrl, aiModel, aiKey } = req.body || {};
+  const {
+    currencySymbol,
+    language,
+    aiBaseUrl,
+    aiModel,
+    aiKey,
+    backupEnabled,
+    backupCronTime,
+    backupR2Endpoint,
+    backupR2Bucket,
+    backupR2Prefix,
+    backupR2AccessKeyId,
+    backupR2SecretKey,
+  } = req.body || {};
+
+  // cron 时间先校验后落库，非法值整体拒绝（"24:00" 前后都不允许）
+  let cronNormalized;
+  if (typeof backupCronTime === "string") {
+    const m = /^(\d{1,2}):(\d{2})$/.exec(backupCronTime.trim());
+    const h = m ? Number(m[1]) : NaN;
+    const min = m ? Number(m[2]) : NaN;
+    if (backupCronTime.trim() === "") cronNormalized = "";
+    else if (!m || h > 23 || min > 59) return bad(res, "invalid cron time");
+    else cronNormalized = `${String(h).padStart(2, "0")}:${m[2]}`;
+  }
+
   if (typeof currencySymbol === "string" && currencySymbol.length <= 4) setSetting("currency_symbol", currencySymbol);
   if (language === "zh" || language === "en") setSetting("language", language);
   if (typeof aiBaseUrl === "string" && aiBaseUrl.trim()) setSetting("ai_base_url", aiBaseUrl.trim());
   if (typeof aiModel === "string" && aiModel.trim()) setSetting("ai_model", aiModel.trim());
   if (typeof aiKey === "string") setSetting("ai_key", aiKey.trim());
+
+  if (typeof backupEnabled === "boolean") setSetting("backup_enabled", backupEnabled ? "1" : "0");
+  if (cronNormalized !== undefined) setSetting("backup_cron_time", cronNormalized);
+  // R2 各字段按提交值覆盖；密钥只在提供非空值时更新（前端不回显、留空即保持不变）
+  if (typeof backupR2Endpoint === "string") setSetting("backup_r2_endpoint", backupR2Endpoint.trim().replace(/\/+$/, ""));
+  if (typeof backupR2Bucket === "string") setSetting("backup_r2_bucket", backupR2Bucket.trim());
+  if (typeof backupR2Prefix === "string") setSetting("backup_r2_prefix", backupR2Prefix.replace(/^\/+|\/+$/g, "").trim());
+  if (typeof backupR2AccessKeyId === "string") setSetting("backup_r2_access_key_id", backupR2AccessKeyId.trim());
+  if (typeof backupR2SecretKey === "string" && backupR2SecretKey.trim()) setSetting("backup_r2_secret_key", backupR2SecretKey.trim());
+
+  syncBackupScheduler();
   res.json({ ok: true });
 });
 
 api.post("/ai/test", async (req, res) => {
   try {
     res.json(await testAiConnection());
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+/* ------------------------- 备份 ------------------------- */
+
+// 立即执行一次完整备份（本地 + 已配置的远端），结果同时写入 settings 供 UI 展示
+api.post("/backup/run", async (req, res) => {
+  try {
+    res.json(await runBackupNow());
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+// R2 连通性测试：要素齐全 + ListObjectsV2 可用
+api.post("/backup/test", async (req, res) => {
+  const cfg = s3ConfigFromSettings();
+  if (!cfg.ready) return bad(res, "R2 not fully configured");
+  try {
+    await s3ListObjects(cfg, cfg.prefix);
+    res.json({ ok: true });
   } catch (e) {
     res.status(400).json({ error: e.message });
   }
