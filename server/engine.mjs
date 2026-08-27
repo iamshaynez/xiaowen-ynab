@@ -101,12 +101,15 @@ export function computeBudget(uptoMonth) {
     for (const id of ids) activity.set(id, 0);
 
     for (const t of monthTx) {
+      if (t.is_start) {
+        // 期初余额：预算内账户的初始资金计入可分配资金（正增负减）
+        inflow += t.amount;
+        continue;
+      }
       const isCC = t.atype === "creditCard" || t.atype === "lineOfCredit";
       const ccp = `cc:${t.account_id}`;
       if (isCC) {
-        if (t.is_start) {
-          activity.set(ccp, (activity.get(ccp) || 0) + t.amount);
-        } else if (t.transfer_account_id) {
+        if (t.transfer_account_id) {
           if (t.amount > 0) activity.set(ccp, (activity.get(ccp) || 0) - t.amount);
         } else if (t.category_id) {
           activity.set(t.category_id, (activity.get(t.category_id) || 0) + t.amount);
@@ -114,7 +117,7 @@ export function computeBudget(uptoMonth) {
         }
         continue;
       }
-      if (t.is_start || t.transfer_account_id) continue;
+      if (t.transfer_account_id) continue;
       if (t.category_id == null) {
         if (t.amount > 0) inflow += t.amount;
         else uncatOutflow += -t.amount;
