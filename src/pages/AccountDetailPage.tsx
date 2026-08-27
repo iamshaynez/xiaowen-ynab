@@ -125,7 +125,7 @@ export function AccountDetailPage({ id }: { id: string }) {
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="border-b border-slate-200 bg-white px-6 pb-4 pt-5 shadow-card">
+      <div className="border-b border-slate-200 bg-white px-4 pb-4 pt-5 shadow-card md:px-6">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
           <a href="#/accounts" className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700">
             <ArrowLeft size={18} />
@@ -184,7 +184,7 @@ export function AccountDetailPage({ id }: { id: string }) {
       </div>
 
       {/* Toolbar */}
-      <div className="flex items-center gap-3 px-6 pt-4">
+      <div className="flex items-center gap-3 px-4 pt-4 md:px-6">
         <div className="relative w-72">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input className={inputCls + " pl-8"} placeholder={t("tx_search")} value={search} onChange={(e) => setSearch(e.target.value)} />
@@ -192,7 +192,7 @@ export function AccountDetailPage({ id }: { id: string }) {
       </div>
 
       {/* Register */}
-      <div className="min-h-0 flex-1 overflow-auto px-6 pb-10 pt-3">
+      <div className="min-h-0 flex-1 overflow-auto px-4 pb-10 pt-3 md:px-6">
         <TxTable
           txs={visible}
           editingId={editingId}
@@ -213,7 +213,7 @@ export function AccountDetailPage({ id }: { id: string }) {
         />
 
         {/* New transaction form */}
-        <div className="mt-4 overflow-hidden rounded-xl border border-brand-200 bg-brand-50/40 shadow-card">
+        <div className="mt-4 min-w-[920px] overflow-visible rounded-xl border border-brand-200 bg-brand-50/40 shadow-card">
           <div className="flex items-center gap-2 border-b border-brand-100 bg-white/70 px-4 py-2 text-[13px] font-semibold text-brand-700">
             <Plus size={14} /> {t("tx_add")}
             <span className="ml-auto text-[11px] font-normal text-slate-400">{t("tx_saveAnother")}</span>
@@ -431,7 +431,7 @@ function TxTable({
   const { t, lang } = useApp();
 
   return (
-    <div className="overflow-visible rounded-xl border border-slate-200 bg-white shadow-card">
+    <div className="min-w-[940px] overflow-visible rounded-xl border border-slate-200 bg-white shadow-card">
       <div className={`${gridCls} border-b border-slate-100 bg-slate-50/80`}>
         <div className={headCls}>{t("tx_status")}</div>
         <div className={headCls}>{t("tx_date")}</div>

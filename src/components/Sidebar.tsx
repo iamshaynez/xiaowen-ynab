@@ -42,7 +42,7 @@ export function accountIcon(type: string): ComponentType<{ size?: number | strin
   }
 }
 
-function AccountRow({ acc }: { acc: Account }) {
+function AccountRow({ acc, onNavigate }: { acc: Account; onNavigate?: () => void }) {
   const nameRef = useRef<HTMLSpanElement>(null);
   const [truncated, setTruncated] = useState(false);
 
@@ -54,6 +54,7 @@ function AccountRow({ acc }: { acc: Account }) {
   return (
     <a
       href={`#/accounts/${acc.id}`}
+      onClick={() => onNavigate?.()}
       onMouseEnter={checkOverflow}
       onFocus={checkOverflow}
       className="group flex items-center gap-2 rounded-lg px-2.5 py-[7px] text-[13px] text-slate-300 transition-colors hover:bg-white/[0.07] hover:text-white"
@@ -79,11 +80,13 @@ function Section({
   accounts,
   navigateTo,
   defaultOpen = true,
+  onNavigate,
 }: {
   label: string;
   accounts: Account[];
   navigateTo?: string;
   defaultOpen?: boolean;
+  onNavigate?: () => void;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   if (!accounts.length) return null;
@@ -106,7 +109,7 @@ function Section({
           </button>
         )}
         {navigateTo && (
-          <a href={navigateTo} className="text-[11px] text-slate-500 hover:text-slate-300">
+          <a href={navigateTo} onClick={() => onNavigate?.()} className="text-[11px] text-slate-500 hover:text-slate-300">
             +
           </a>
         )}
@@ -115,7 +118,7 @@ function Section({
         <>
           <div className="mt-1 space-y-px">
             {accounts.map((a) => (
-              <AccountRow key={a.id} acc={a} />
+              <AccountRow key={a.id} acc={a} onNavigate={onNavigate} />
             ))}
           </div>
           <div className="mt-1 flex items-center justify-between border-t border-white/[0.06] px-2.5 pt-1.5 text-[11px]">
@@ -128,7 +131,15 @@ function Section({
   );
 }
 
-export function Sidebar({ route }: { route: string }) {
+export function Sidebar({
+  route,
+  open,
+  onNavigate,
+}: {
+  route: string;
+  open?: boolean;
+  onNavigate?: () => void;
+}) {
   const { boot, t, lang, setLang } = useApp();
   const [currencyOpen, setCurrencyOpen] = useState(false);
   const [symbol, setSymbol] = useState(boot?.settings.currencySymbol ?? "¥");
@@ -139,7 +150,11 @@ export function Sidebar({ route }: { route: string }) {
   const closed = accs.filter((a) => a.closed);
 
   return (
-    <aside className="sidebar-scroll fixed inset-y-0 left-0 z-30 flex w-60 flex-col overflow-y-auto bg-navy-900 pb-4 pt-5 shadow-[inset_-1px_0_0_rgba(255,255,255,0.04)]">
+    <aside
+      className={`sidebar-scroll fixed inset-y-0 left-0 z-50 flex w-72 flex-col overflow-y-auto bg-navy-900 pb-4 pt-5 shadow-[inset_-1px_0_0_rgba(255,255,255,0.04)] transition-transform duration-200 md:z-30 md:w-60 md:translate-x-0 ${
+        open ? "translate-x-0" : "-translate-x-full"
+      }`}
+    >
       <div className="mb-6 flex items-center gap-2.5 px-4">
         <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-brand-400 to-brand-600 shadow-lg shadow-brand-600/30">
           <Wallet size={18} className="text-white" />
@@ -162,6 +177,7 @@ export function Sidebar({ route }: { route: string }) {
           <a
             key={href}
             href={href}
+            onClick={onNavigate}
             className={`flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] font-medium transition-all ${
               active
                 ? "bg-gradient-to-r from-brand-600 to-brand-500 text-white shadow-md shadow-brand-600/25"
@@ -175,9 +191,9 @@ export function Sidebar({ route }: { route: string }) {
       </nav>
 
       <div className="flex-1 px-3">
-        <Section label={t("sidebar_onBudget")} accounts={onBudget} navigateTo="#/accounts" />
-        <Section label={t("sidebar_tracking")} accounts={tracking} navigateTo="#/accounts" />
-        <Section label={t("sidebar_closed")} accounts={closed} defaultOpen={false} />
+        <Section label={t("sidebar_onBudget")} accounts={onBudget} navigateTo="#/accounts" onNavigate={onNavigate} />
+        <Section label={t("sidebar_tracking")} accounts={tracking} navigateTo="#/accounts" onNavigate={onNavigate} />
+        <Section label={t("sidebar_closed")} accounts={closed} defaultOpen={false} onNavigate={onNavigate} />
       </div>
 
       <div className="mt-auto space-y-3 px-4 pt-4">

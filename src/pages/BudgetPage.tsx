@@ -160,7 +160,7 @@ export function BudgetPage() {
       <div className="flex h-full min-w-[1060px] flex-1 flex-col">
         {/* Header */}
         <div className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur">
-          <div className="flex flex-wrap items-center gap-3 px-6 pb-2 pt-3">
+          <div className="flex flex-wrap items-center gap-3 px-4 pb-2 pt-3 md:px-6">
             <div className="flex items-center gap-1 rounded-xl bg-slate-100 p-1">
               <button
                 onClick={() => canPrev && setBase(shiftMonth(base, -1))}
@@ -251,7 +251,7 @@ export function BudgetPage() {
           </div>
 
           {/* Month timeline */}
-          <div ref={stripRef} className="flex items-center gap-1 overflow-x-auto px-6 pb-1.5 pt-0.5">
+          <div ref={stripRef} className="flex items-center gap-1 overflow-x-auto px-4 pb-1.5 pt-0.5 md:px-6">
             {timelineMonths.map((m, i) => {
               const prev = i > 0 ? timelineMonths[i - 1] : "";
               const showYear = !prev || m.slice(0, 4) !== prev.slice(0, 4);
@@ -278,12 +278,12 @@ export function BudgetPage() {
           </div>
 
           {!isCurrent && base > boot.currentMonth && (
-            <div className="border-t border-amber-100 bg-amber-50 px-6 py-1.5 text-xs text-amber-700">
+            <div className="border-t border-amber-100 bg-amber-50 px-4 py-1.5 text-xs text-amber-700 md:px-6">
               {t("budget_futureHint")}
             </div>
           )}
           {cur.uncategorizedCount > 0 && (
-            <a href="#/transactions?filter=uncategorized" className="block border-t border-amber-100 bg-amber-50 px-6 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-100">
+            <a href="#/transactions?filter=uncategorized" className="block border-t border-amber-100 bg-amber-50 px-4 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-100 md:px-6">
               <AlertTriangle size={12} className="mr-1 inline" />
               {t("budget_uncategorized", { n: cur.uncategorizedCount })}
               <span className="ml-2 underline">{t("budget_goResolve")} →</span>
@@ -291,7 +291,7 @@ export function BudgetPage() {
           )}
 
           {/* Column headers */}
-          <div className={`${GRID} px-6 pb-1 pt-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400`}>
+          <div className={`${GRID} px-4 pb-1 pt-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400 md:px-6`}>
             <div>{t("nav_budget").toUpperCase()}</div>
             {monthsWin.map((m) => (
               <MonthHead
@@ -306,7 +306,7 @@ export function BudgetPage() {
               />
             ))}
           </div>
-          <div className={`${GRID} px-6 pb-2 text-[10px] font-medium uppercase tracking-wide text-slate-300`}>
+          <div className={`${GRID} px-4 pb-2 text-[10px] font-medium uppercase tracking-wide text-slate-300 md:px-6`}>
             <div />
             {monthsWin.map((m) => (
               <div key={m} className={`${MONTH_GRID} col-span-3`}>
