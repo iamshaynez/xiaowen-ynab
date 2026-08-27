@@ -13,7 +13,7 @@ import {
   TrendingUp,
   Wallet,
 } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { ComponentType } from "react";
 import { useApp } from "../store";
 import { fmtMoney } from "../format";
@@ -43,9 +43,19 @@ export function accountIcon(type: string): ComponentType<{ size?: number | strin
 }
 
 function AccountRow({ acc }: { acc: Account }) {
+  const nameRef = useRef<HTMLSpanElement>(null);
+  const [truncated, setTruncated] = useState(false);
+
+  const checkOverflow = () => {
+    const el = nameRef.current;
+    if (el) setTruncated(el.scrollWidth > el.clientWidth);
+  };
+
   return (
     <a
       href={`#/accounts/${acc.id}`}
+      onMouseEnter={checkOverflow}
+      onFocus={checkOverflow}
       className="group flex items-center gap-2 rounded-lg px-2.5 py-[7px] text-[13px] text-slate-300 transition-colors hover:bg-white/[0.07] hover:text-white"
     >
       <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-white/10 text-slate-300 group-hover:text-white">
@@ -54,7 +64,9 @@ function AccountRow({ acc }: { acc: Account }) {
           return <Icon size={12} />;
         })()}
       </span>
-      <span className="min-w-0 flex-1 truncate">{acc.name}</span>
+      <span ref={nameRef} title={truncated ? acc.name : undefined} className="min-w-0 flex-1 truncate">
+        {acc.name}
+      </span>
       <span className={`num text-xs ${acc.balance < 0 ? "text-rose-300" : "text-slate-400"} group-hover:text-slate-200`}>
         {fmtMoney(acc.balance)}
       </span>
