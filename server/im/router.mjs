@@ -1,5 +1,5 @@
 import { db } from "../db.mjs";
-import { createSession, appendUserMessage, runAgent, confirmPending } from "../ai.mjs";
+import { createSession, appendUserMessage, runAgent, confirmPending, normalizeImages } from "../ai.mjs";
 import { formatForIm } from "./format.mjs";
 
 // IM 里用于确认/取消写操作的关键词。
@@ -90,15 +90,21 @@ async function finishConfirm(channelRow, sessionId, approve) {
 
 /**
  * IM 渠道入站消息统一入口。
+ * @param {object} channelRow
+ * @param {string} externalId
+ * @param {string} text
+ * @param {object} opts - 可选：{ images: string[] }
  * @returns {Promise<string>} 需要回发给 IM 用户的消息文本
  */
-export async function handleInbound(channelRow, externalId, text) {
-  const trimmed = String(text ?? "").trim();
-  if (!trimmed) return "";
+export async function handleInbound(channelRow, externalId, text, opts = {}) {
+  const trimmed = String(text ?? "").trim().slice(0, 8000);
+  const images = normalizeImages(opts?.images || []);
+  if (!trimmed && images.length === 0) return "";
 
   try {
     // /new 优先级最高：即使存在待确认操作也直接开新会话（旧待确认随之作废）
-    if (NEW_SESSION_RE.test(trimmed)) {
+    // 纯文字 /new 才触发，带图的消息不触发
+    if (trimmed && images.length === 0 && NEW_SESSION_RE.test(trimmed)) {
       const prev = existingSession(channelRow, externalId);
       createImSession(channelRow, externalId);
       return (prev && hasPending(prev.id) ? NEW_SESSION_HINT + NEW_SESSION_ABANDONED : NEW_SESSION_HINT);
@@ -113,8 +119,9 @@ export async function handleInbound(channelRow, externalId, text) {
     }
 
     const mark = snapshot(session.id);
-    appendUserMessage(session.id, trimmed.slice(0, 8000));
-    const result = await runAgent(session.id);
+    // 方案1：图片瞬态不落库，仅当次传给模型（content 为空时标题自动落“图片记账”）
+    appendUserMessage(session.id, trimmed);
+    const result = await runAgent(session.id, { images });
     if (result?.status === "awaiting_confirmation") {
       // 助手在发起写操作前的自然语言说明也要送达 IM 用户，后接确认指引
       const said = collectAssistantText(session.id, mark);

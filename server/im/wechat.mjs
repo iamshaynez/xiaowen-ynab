@@ -140,6 +140,74 @@ export function extractInboundText(msg) {
   return bodyFromItemList(msg.item_list);
 }
 
+function mimeFromUrl(url) {
+  const low = String(url || "").toLowerCase();
+  if (low.includes(".png")) return "image/png";
+  if (low.includes(".webp")) return "image/webp";
+  if (low.includes(".gif")) return "image/gif";
+  return "image/jpeg";
+}
+
+async function fetchImageUrlToDataUrl(url) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), API_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, { signal: ctrl.signal });
+    if (!res.ok) throw new Error(`fetch image ${res.status}`);
+    const buf = Buffer.from(await res.arrayBuffer());
+    const mime = res.headers.get("content-type")?.startsWith("image/") ? res.headers.get("content-type") : mimeFromUrl(url);
+    return `data:${mime};base64,${buf.toString("base64")}`;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** 从 USER 消息的 item_list 中提取图片 data URL 列表（多模态） */
+export async function extractInboundImages(msg) {
+  if (!msg || msg.message_type !== 1 || !Array.isArray(msg.item_list)) return [];
+  const out = [];
+  for (const item of msg.item_list) {
+    if (!item) continue;
+    // 跳过已处理的文字/语音
+    if (item.type === 1 || item.type === 3) continue;
+    // 尝试在各种可能的字段中发现图片数据
+    // 常见形态：{type:2, image_item:{url:"https://...", data:"base64...", thumb_url:"..."}}
+    const candidates = [];
+    if (item.image_item) {
+      candidates.push(item.image_item.url, item.image_item.data, item.image_item.base64, item.image_item.thumb_url, item.image_item.url_list?.[0]);
+      if (Array.isArray(item.image_item.url_list)) candidates.push(...item.image_item.url_list);
+    }
+    if (item.pic_item) candidates.push(item.pic_item.url, item.pic_item.data);
+    if (item.file_item) candidates.push(item.file_item.url);
+    // 某些协议直接在 item.url / item.data 上
+    candidates.push(item.url, item.data, item.base64);
+    // 也可能是 type 2 的 text_item 里藏着图片？忽略
+    for (const c of candidates) {
+      if (typeof c !== "string" || !c) continue;
+      const s = c.trim();
+      if (!s) continue;
+      if (s.startsWith("data:image/")) {
+        out.push(s);
+        break;
+      }
+      if (s.startsWith("http://") || s.startsWith("https://")) {
+        try {
+          const dataUrl = await fetchImageUrlToDataUrl(s);
+          out.push(dataUrl);
+        } catch {}
+        break;
+      }
+      // 纯 base64 无前缀（少见）
+      if (/^[A-Za-z0-9+/=]{100,}$/.test(s) && s.length > 200) {
+        out.push(`data:image/jpeg;base64,${s}`);
+        break;
+      }
+    }
+    if (out.length >= 6) break;
+  }
+  return out;
+}
+
 /* ------------------------- 扫码登录状态机 ------------------------- */
 
 const loginSessions = new Map(); // channelId -> session
@@ -345,17 +413,21 @@ export function createWechatPersonalAdapter({ token, baseUrl, cursor = null }, h
     if (!userId || seen(msg.message_id)) return;
     if (msg.message_type !== 1) return; // 只处理 USER 消息
     const text = extractInboundText(msg);
-    if (!text) {
-      // USER 消息但不含文字（图片/语音等）→ 提示仅支持文字
+    const images = await extractInboundImages(msg);
+    if (!text && images.length === 0) {
+      // USER 消息但既无文字也无图片（语音等）→ 提示支持范围
       if (msg.item_list?.length) {
         await client
-          .sendText(userId, "目前只支持文字消息，请直接输入想问的内容～", msg.context_token)
+          .sendText(userId, "目前支持文字和图片消息，图片可用于识别票据/账单来记账～", msg.context_token)
           .catch((e) => hooks.log?.(`[wechat] sendText failed: ${e.message}`));
       }
       return;
     }
+    const effectiveText = text || (images.length ? "请识别这张图片中的消费信息并记账。" : "");
     try {
-      const reply = await hooks.onMessage(userId, text, { contextToken: msg.context_token });
+      const meta = { contextToken: msg.context_token };
+      if (images.length) meta.images = images;
+      const reply = await hooks.onMessage(userId, effectiveText, meta);
       if (reply) {
         await client.sendText(userId, reply, msg.context_token);
       }

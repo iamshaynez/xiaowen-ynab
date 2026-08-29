@@ -47,6 +47,62 @@ export function createTelegramAdapter({ token, allowedChatIds = [], cursor = nul
     });
   }
 
+  function mimeFromFilePath(filePath) {
+    const ext = (filePath.split(".").pop() || "").toLowerCase();
+    if (ext === "jpg" || ext === "jpeg") return "image/jpeg";
+    if (ext === "png") return "image/png";
+    if (ext === "webp") return "image/webp";
+    if (ext === "gif") return "image/gif";
+    return "image/jpeg";
+  }
+
+  async function downloadTelegramFile(filePath) {
+    const url = `${API_BASE}/file/bot${token}/${filePath}`;
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), CALL_TIMEOUT_MS);
+    try {
+      const res = await fetch(url, { signal: ctrl.signal });
+      if (!res.ok) throw new Error(`download ${res.status}`);
+      const buf = Buffer.from(await res.arrayBuffer());
+      const mime = mimeFromFilePath(filePath);
+      return `data:${mime};base64,${buf.toString("base64")}`;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  async function extractImageDataUrls(msg) {
+    const urls = [];
+    // photo: array of PhotoSize, last is highest resolution
+    if (Array.isArray(msg.photo) && msg.photo.length) {
+      const best = msg.photo[msg.photo.length - 1];
+      if (best?.file_id) {
+        try {
+          const file = await apiCall("getFile", { file_id: best.file_id }, CALL_TIMEOUT_MS);
+          if (file?.file_path) {
+            const dataUrl = await downloadTelegramFile(file.file_path);
+            urls.push(dataUrl);
+          }
+        } catch (e) {
+          hooks.log?.(`[telegram] getFile photo failed: ${e.message}`);
+        }
+      }
+    }
+    // document image (user sends as file)
+    if (msg.document && typeof msg.document.mime_type === "string" && msg.document.mime_type.startsWith("image/")) {
+      try {
+        const file = await apiCall("getFile", { file_id: msg.document.file_id }, CALL_TIMEOUT_MS);
+        if (file?.file_path) {
+          const dataUrl = await downloadTelegramFile(file.file_path);
+          urls.push(dataUrl);
+        }
+      } catch (e) {
+        hooks.log?.(`[telegram] getFile document failed: ${e.message}`);
+      }
+    }
+    return urls;
+  }
+
   /** 单次拉取并处理所有待处理更新；独立导出便于测试 */
   async function pollOnce() {
     const updates = await apiCall("getUpdates", { offset, timeout: POLL_TIMEOUT_SEC }, POLL_HTTP_TIMEOUT_MS);
@@ -54,11 +110,25 @@ export function createTelegramAdapter({ token, allowedChatIds = [], cursor = nul
       offset = u.update_id + 1;
       hooks.persistCursor?.(String(offset));
       const msg = u.message;
-      if (!msg || typeof msg.text !== "string" || !msg.text.trim()) continue;
-      const chatId = String(msg.chat.id);
-      if (allowSet.size > 0 && !allowSet.has(chatId)) continue;
+      if (!msg) continue;
+      const chatId = String(msg.chat?.id ?? msg.chatId ?? "");
+      if (!chatId) continue;
+      if (allowSet.size > 0 && !allowSet.has(chatId)) {
+        // 仍需推进 offset，但不处理
+        continue;
+      }
+      const text = typeof msg.text === "string" ? msg.text : typeof msg.caption === "string" ? msg.caption : "";
+      const hasPhoto = Array.isArray(msg.photo) && msg.photo.length > 0;
+      const hasImageDoc = !!(msg.document && typeof msg.document.mime_type === "string" && msg.document.mime_type.startsWith("image/"));
+      const hasImage = hasPhoto || hasImageDoc;
+      if (!text.trim() && !hasImage) continue;
       try {
-        const reply = await hooks.onMessage(chatId, msg.text);
+        const images = hasImage ? await extractImageDataUrls(msg) : [];
+        // 如果是纯图片没有文字，给一个默认提示供 LLM 识别
+        const effectiveText = text.trim() || (images.length ? "请识别这张图片中的消费信息并记账。" : "");
+        const meta = {};
+        if (images.length) meta.images = images;
+        const reply = await hooks.onMessage(chatId, effectiveText, Object.keys(meta).length ? meta : undefined);
         if (reply) await sendText(chatId, reply);
       } catch (e) {
         hooks.log?.(`[telegram] handle message failed: ${e.message}`);
