@@ -13,7 +13,7 @@ let seq = 0;
 function seedMsg(sessionId, fields) {
   seq += 1;
   db.prepare(
-    "INSERT INTO chat_messages(id,session_id,role,content,tool_calls,tool_call_id,pending_sql,pending_purpose,pending_index,resolved,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)"
+    "INSERT INTO chat_messages(id,session_id,role,content,tool_calls,tool_call_id,reasoning_content,pending_sql,pending_purpose,pending_index,resolved,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)"
   ).run(
     `m${seq}`,
     sessionId,
@@ -21,6 +21,7 @@ function seedMsg(sessionId, fields) {
     fields.content ?? null,
     fields.toolCalls ? JSON.stringify(fields.toolCalls) : null,
     fields.toolCallId ?? null,
+    fields.reasoningContent ?? null,
     fields.pendingSql ?? null,
     fields.pendingPurpose ?? null,
     fields.pendingIndex ?? null,
@@ -120,6 +121,33 @@ describe("buildLlmMessages：tool_calls 历史必须完整配对", () => {
     expect(() => assertValidToolSequence(out)).not.toThrow();
     expect(out.filter((m) => m.role === "tool")).toHaveLength(2);
     expect(out.at(-1)).toEqual({ role: "assistant", content: "共有 2 个账户。" });
+  });
+
+  it("重建历史时保留 assistant 消息的 reasoning_content（思考模型续跑不触发 400）", () => {
+    const s = createSession("t5");
+    seedMsg(s.id, { role: "user", content: "帮我创建一个房贷的账户" });
+    seedMsg(s.id, {
+      role: "assistant",
+      content: "好的，帮你创建一个房贷的账户。",
+      toolCalls: [],
+      reasoningContent: "用户想要一个房贷账户，这属于贷款类负债，应设为预算外账户。",
+    });
+    seedMsg(s.id, {
+      role: "assistant",
+      content: "",
+      toolCalls: [tc("call-p")],
+      pendingSql: "INSERT INTO accounts(id,name,type,on_budget) VALUES('a','房贷','personalLoan',0)",
+      resolved: 0,
+      reasoningContent: "需要执行一条 INSERT 来创建账户。",
+    });
+    seedMsg(s.id, { role: "tool", toolCallId: "call-p", content: '{"ok":true,"changes":1}' });
+
+    const out = buildLlmMessages(s.id);
+    const assistants = out.filter((m) => m.role === "assistant");
+    expect(assistants).toHaveLength(2);
+    expect(assistants[0].reasoning_content).toBe("用户想要一个房贷账户，这属于贷款类负债，应设为预算外账户。");
+    expect(assistants[1].reasoning_content).toBe("需要执行一条 INSERT 来创建账户。");
+    expect(() => assertValidToolSequence(out)).not.toThrow();
   });
 });
 
