@@ -301,7 +301,19 @@ export function listSessions() {
       `SELECT s.*, (SELECT content FROM chat_messages m WHERE m.session_id=s.id AND m.role='user' ORDER BY m.created_at DESC LIMIT 1) AS preview
        FROM chat_sessions s WHERE s.channel='web' ORDER BY s.updated_at DESC`
     )
-    .all();
+    .all()
+    .map(toSession);
+}
+
+// API 层合同：前端 ChatSession(TS 类型)使用 camelCase 字段；DB 行是 snake_case，这里统一映射。
+function toSession(r) {
+  return {
+    id: r.id,
+    title: r.title,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+    preview: r.preview ?? null,
+  };
 }
 
 export function createSession(title, meta = {}) {
@@ -319,7 +331,8 @@ export function createSession(title, meta = {}) {
 }
 
 export function getSessionRow(id) {
-  return db.prepare("SELECT * FROM chat_sessions WHERE id=?").get(id);
+  const r = db.prepare("SELECT * FROM chat_sessions WHERE id=?").get(id);
+  return r ? toSession(r) : undefined;
 }
 
 export function deleteSession(id) {
