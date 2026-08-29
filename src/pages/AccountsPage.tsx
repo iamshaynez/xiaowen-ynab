@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ChevronRight, Plus } from "lucide-react";
 import { useApp } from "../store";
-import { fmtMoney } from "../format";
+import { fmtMoney, todayIso } from "../format";
 import { api } from "../api";
 import { Btn, Field, Modal, inputCls } from "../components/ui";
 import { accountIcon } from "../components/Sidebar";
@@ -70,7 +70,7 @@ export function AccountsPage() {
   const [name, setName] = useState("");
   const [type, setType] = useState("checking");
   const [balance, setBalance] = useState("");
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(() => todayIso(boot?.settings.timezone));
 
   if (!boot) return null;
   const accs = boot.accounts;
@@ -99,7 +99,7 @@ export function AccountsPage() {
           <h1 className="text-xl font-bold text-slate-900">{t("nav_accounts")}</h1>
           <p className="mt-0.5 text-[13px] text-slate-400">{t("common_allAccounts")}</p>
         </div>
-        <Btn variant="primary" onClick={() => setOpen(true)}>
+        <Btn variant="primary" onClick={() => { setDate(todayIso(boot?.settings.timezone)); setOpen(true); }}>
           <Plus size={15} /> {t("account_add")}
         </Btn>
       </div>

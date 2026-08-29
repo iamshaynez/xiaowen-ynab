@@ -43,6 +43,7 @@ export const api = {
   saveSettings: (body: {
     currencySymbol?: string;
     language?: string;
+    timezone?: string;
     aiBaseUrl?: string;
     aiModel?: string;
     aiKey?: string;

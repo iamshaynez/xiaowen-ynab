@@ -3,6 +3,7 @@ import {
   uid,
   nowIso,
   getSetting,
+  getTimezone,
   currentMonth,
   todayYmd,
 } from "./db.mjs";
@@ -99,6 +100,7 @@ export function buildSystemPrompt() {
     })
     .join("\n");
 
+  const tz = getTimezone();
   const base = `你是「小文预算」内置的智能记账与财务分析助手，运行在本地 SQLite 数据库之上。请始终使用用户使用的语言回复（默认简体中文）。
 
 # 应用方法论（YNAB 四法则）
@@ -124,7 +126,8 @@ ${buildSchemaDoc()}
   现金类(checking/savings/cash)与信用卡默认 on_budget=1。
 
 # 当前账本快照
-今天：${todayYmd()}；当前月份：${currentMonth()}
+今天：${todayYmd()}（时区：${tz}）；当前月份：${currentMonth()}
+⚠️ 日期规范：所有写入 transactions.date 必须直接使用此“今天”的 YYYY-MM-DD 字面量（或用户在对话中明确指定的日期）；禁止使用 SQLite 的 date('now')/datetime('now')/strftime('%Y-%m-%d','now')，否则会得到 UTC 而非配置时区的日期，导致跨天错位。报表/预算的月份筛选亦以此历法日期为准。
 账户：
 ${accounts.join("\n") || "  （暂无账户）"}
 分类组与分类：
