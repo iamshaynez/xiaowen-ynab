@@ -225,7 +225,7 @@ export function AccountDetailPage({ id }: { id: string }) {
 
         {/* New transaction form */}
         <div className="mt-4 min-w-[920px] overflow-visible rounded-xl border border-brand-200 bg-brand-50/40 shadow-card">
-          <div className="flex items-center gap-2 border-b border-brand-100 bg-white/70 px-4 py-2 text-[13px] font-semibold text-brand-700">
+          <div className="flex items-center gap-2 rounded-t-xl border-b border-brand-100 bg-white/70 px-4 py-2 text-[13px] font-semibold text-brand-700">
             <Plus size={14} /> {t("tx_add")}
             <span className="ml-auto text-[11px] font-normal text-slate-400">{t("tx_saveAnother")}</span>
           </div>
@@ -443,7 +443,7 @@ function TxTable({
 
   return (
     <div className="min-w-[940px] overflow-visible rounded-xl border border-slate-200 bg-white shadow-card">
-      <div className={`${gridCls} border-b border-slate-100 bg-slate-50/80`}>
+      <div className={`${gridCls} rounded-t-xl border-b border-slate-100 bg-slate-50/80`}>
         <div className={headCls}>{t("tx_status")}</div>
         <div className={headCls}>{t("tx_date")}</div>
         <div className={headCls}>{t("tx_payee")}</div>
@@ -458,7 +458,7 @@ function TxTable({
 
       {txs.map((tx) =>
         editingId === tx.id ? (
-          <div key={tx.id} className={`${gridCls} border-b border-slate-50 bg-brand-50/50 px-3 py-1.5`} onKeyDown={(e) => e.key === "Enter" && onSaveEdit()}>
+          <div key={tx.id} className={`${gridCls} last:rounded-b-xl border-b border-slate-50 bg-brand-50/50 px-3 py-1.5`} onKeyDown={(e) => e.key === "Enter" && onSaveEdit()}>
             <button onClick={onCancelEdit} className="mx-auto rounded p-1 text-slate-400 hover:bg-slate-200">
               <X size={14} />
             </button>
@@ -496,7 +496,7 @@ function TxTable({
         ) : (
           <div
             key={tx.id}
-            className={`row-hover group ${gridCls} border-b border-slate-50 px-3 py-[7px] transition-colors last:border-b-0 hover:bg-slate-50 ${
+            className={`row-hover group ${gridCls} border-b border-slate-50 px-3 py-[7px] transition-colors last:border-b-0 last:rounded-b-xl hover:bg-slate-50 ${
               tx.reconciled ? "bg-slate-50/40" : ""
             }`}
           >
