@@ -9,6 +9,8 @@ export interface Settings {
   aiKey: string;
   /** 额外提示词：嵌入智能助手（含 IM）的系统提示词，供用户补充自定义上下文 */
   aiExtraPrompt: string;
+  /** 智能助手写操作是否需要二次确认（关闭则直接执行） */
+  aiRequireConfirmation: boolean;
   /** 备份：每日定时 + Cloudflare R2 (S3 兼容) 远端 */
   backupEnabled: boolean;
   backupCronTime: string;

@@ -122,6 +122,7 @@ describe("SettingsPage", () => {
         aiModel: "deepseek-chat",
         aiKey: "sk-test",
         aiExtraPrompt: "",
+        aiRequireConfirmation: true,
       })
     );
     await waitFor(() => expect(h.refreshBoot).toHaveBeenCalled());

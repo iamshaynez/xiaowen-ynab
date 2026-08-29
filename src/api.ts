@@ -48,6 +48,7 @@ export const api = {
     aiModel?: string;
     aiKey?: string;
     aiExtraPrompt?: string;
+    aiRequireConfirmation?: boolean;
     backupEnabled?: boolean;
     backupCronTime?: string;
     backupR2Endpoint?: string;

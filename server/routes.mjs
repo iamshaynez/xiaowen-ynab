@@ -101,6 +101,7 @@ api.get("/bootstrap", (req, res) => {
       aiModel: getSetting("ai_model", "gpt-4o-mini"),
       aiKey: getSetting("ai_key", ""),
       aiExtraPrompt: getSetting("ai_extra_prompt", ""),
+      aiRequireConfirmation: getSetting("ai_require_confirmation", "1") !== "0",
       ...readBackupSettings(),
     },
     accounts: accountsWithBalances(),
@@ -124,6 +125,7 @@ api.get("/settings", (req, res) => {
     aiModel: getSetting("ai_model", "gpt-4o-mini"),
     aiKey: getSetting("ai_key", ""),
     aiExtraPrompt: getSetting("ai_extra_prompt", ""),
+    aiRequireConfirmation: getSetting("ai_require_confirmation", "1") !== "0",
     ...readBackupSettings(),
   });
 });
@@ -137,6 +139,7 @@ api.put("/settings", (req, res) => {
     aiModel,
     aiKey,
     aiExtraPrompt,
+    aiRequireConfirmation,
     backupEnabled,
     backupCronTime,
     backupR2Endpoint,
@@ -171,6 +174,7 @@ api.put("/settings", (req, res) => {
     if (aiExtraPrompt.trim().length > MAX_EXTRA_PROMPT_CHARS) return bad(res, "ai extra prompt too long");
     setSetting("ai_extra_prompt", aiExtraPrompt.trim());
   }
+  if (typeof aiRequireConfirmation === "boolean") setSetting("ai_require_confirmation", aiRequireConfirmation ? "1" : "0");
 
   if (typeof backupEnabled === "boolean") setSetting("backup_enabled", backupEnabled ? "1" : "0");
   if (cronNormalized !== undefined) setSetting("backup_cron_time", cronNormalized);
