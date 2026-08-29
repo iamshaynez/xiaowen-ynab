@@ -200,7 +200,7 @@ function execWrite(sql) {
 /* ------------------------- Persistence ------------------------- */
 
 const insMsgStmt = db.prepare(
-  "INSERT INTO chat_messages(id,session_id,role,content,tool_calls,tool_call_id,pending_sql,pending_purpose,pending_index,resolved,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)"
+  "INSERT INTO chat_messages(id,session_id,role,content,tool_calls,tool_call_id,reasoning_content,pending_sql,pending_purpose,pending_index,resolved,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)"
 );
 
 export function listSessions() {
@@ -258,6 +258,7 @@ function transformMsg(m) {
     id: m.id,
     role: m.role,
     content: m.content ?? "",
+    reasoningContent: m.reasoning_content ?? null,
     toolCalls: m.tool_calls ? JSON.parse(m.tool_calls) : null,
     toolCallId: m.tool_call_id ?? null,
     pending:
@@ -283,6 +284,7 @@ function addMessage(sessionId, fields) {
     fields.content ?? null,
     fields.toolCalls ? JSON.stringify(fields.toolCalls) : null,
     fields.toolCallId ?? null,
+    fields.reasoningContent ?? null,
     fields.pendingSql ?? null,
     fields.pendingPurpose ?? null,
     fields.pendingIndex ?? null,
@@ -329,6 +331,7 @@ export function buildLlmMessages(sessionId) {
         out.push({
           role: "assistant",
           content: m.content || null,
+          ...(m.reasoning_content ? { reasoning_content: m.reasoning_content } : {}),
           tool_calls: calls.map((c) => ({
             id: c.id,
             type: "function",
@@ -338,7 +341,11 @@ export function buildLlmMessages(sessionId) {
         awaiting = calls.map((c) => c.id).filter(Boolean);
       } else if (m.content) {
         flushAwaiting();
-        out.push({ role: "assistant", content: m.content });
+        out.push({
+          role: "assistant",
+          content: m.content,
+          ...(m.reasoning_content ? { reasoning_content: m.reasoning_content } : {}),
+        });
       }
     } else if (m.role === "tool") {
       if (m.tool_call_id && awaiting.includes(m.tool_call_id)) {
@@ -429,7 +436,12 @@ export async function runAgent(sessionId) {
         return { call, sql, purpose, cls: classifySql(sql) };
       });
       const { executable, writePlan, visibleCalls } = splitToolPlans(plans);
-      addMessage(sessionId, { role: "assistant", content: msg.content || "", toolCalls: visibleCalls });
+      addMessage(sessionId, {
+        role: "assistant",
+        content: msg.content || "",
+        toolCalls: visibleCalls,
+        reasoningContent: msg.reasoning_content ?? null,
+      });
 
       let stopped = false;
       for (const p of executable) {
@@ -453,6 +465,7 @@ export async function runAgent(sessionId) {
           role: "assistant",
           content: "",
           toolCalls: [writePlan.call],
+          reasoningContent: msg.reasoning_content ?? null,
           pendingSql: writePlan.cls.sql,
           pendingPurpose: writePlan.purpose,
           pendingIndex: 0,
@@ -463,7 +476,11 @@ export async function runAgent(sessionId) {
       continue;
     }
 
-    addMessage(sessionId, { role: "assistant", content: msg.content || "(无内容)" });
+    addMessage(sessionId, {
+      role: "assistant",
+      content: msg.content || "(无内容)",
+      reasoningContent: msg.reasoning_content ?? null,
+    });
     return { status: "idle" };
   }
 

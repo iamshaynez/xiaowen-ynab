@@ -247,4 +247,15 @@ CREATE INDEX IF NOT EXISTS idx_chat_sessions_channel_lookup ON chat_sessions(cha
       db.exec("ALTER TABLE categories ADD COLUMN note TEXT NOT NULL DEFAULT ''");
     },
   },
+  {
+    // 思考型模型（Kimi K2.x / DeepSeek / Qwen3 / GLM 等）会在 assistant 消息里额外返回
+    // reasoning_content（思考轨迹）。续跑时它们的 API 要求把该字段原样回传，
+    // 否则返回 400「The reasoning content in the thinking mode must be passed back to the API」。
+    // 这里给 chat_messages 增加该列，供 runAgent 持久化、buildLlmMessages 重建历史时回传。
+    version: 8,
+    name: "chat-reasoning-content",
+    up: (db) => {
+      db.exec("ALTER TABLE chat_messages ADD COLUMN reasoning_content TEXT");
+    },
+  },
 ];
