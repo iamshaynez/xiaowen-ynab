@@ -549,6 +549,8 @@ function SessionItem({
 
 function fmtRel(iso: string, lang: string): string {
   const diff = Date.now() - new Date(iso).getTime();
+  // 无效/缺失日期会得到 NaN，直接返回空，避免显示 "NaN 天前"
+  if (Number.isNaN(diff)) return "";
   const min = Math.floor(diff / 60000);
   if (lang === "zh") {
     if (min < 1) return "刚刚";

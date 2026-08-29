@@ -71,6 +71,7 @@ if (!getSetting("initialized")) {
   setSetting("ai_base_url", "https://api.openai.com/v1");
   setSetting("ai_model", "gpt-4o-mini");
   setSetting("ai_key", "");
+  setSetting("ai_require_confirmation", "1");
   try {
     const sysTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
     if (sysTz && isValidTimezone(sysTz)) setSetting("timezone", sysTz);
@@ -81,7 +82,10 @@ if (!getSetting("initialized")) {
   seedDefaultCategories();
   setSetting("initialized", "1");
 }
-// 已初始化的老库若缺失时区设置，补一个默认值以保证时钟一致
+// 已初始化的老库若缺失关键设置，补默认值以保证一致
+if (!getSetting("ai_require_confirmation")) {
+  setSetting("ai_require_confirmation", "1");
+}
 if (!getSetting("timezone")) {
   try {
     const sysTz = Intl.DateTimeFormat().resolvedOptions().timeZone;

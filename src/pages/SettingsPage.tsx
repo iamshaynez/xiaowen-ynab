@@ -91,15 +91,28 @@ export function SettingsPage() {
   const [aiModel, setAiModel] = useState(boot?.settings.aiModel ?? "");
   const [aiKey, setAiKey] = useState(boot?.settings.aiKey ?? "");
   const [aiExtraPrompt, setAiExtraPrompt] = useState(boot?.settings.aiExtraPrompt ?? "");
+  const [aiRequireConfirmation, setAiRequireConfirmation] = useState(boot?.settings.aiRequireConfirmation ?? true);
   const [testing, setTesting] = useState(false);
   const configured = !!boot?.settings.aiKey;
 
+  useEffect(() => {
+    if (typeof boot?.settings.aiRequireConfirmation === "boolean") setAiRequireConfirmation(boot.settings.aiRequireConfirmation);
+  }, [boot?.settings.aiRequireConfirmation]);
+
   const saveAi = async () => {
+    // 关闭二次确认时二次弹窗，防止误关导致不可逆写入
+    if (boot?.settings.aiRequireConfirmation && !aiRequireConfirmation) {
+      if (!confirm(t("settings_aiRequireConfirmDisableTip"))) {
+        setAiRequireConfirmation(true);
+        return;
+      }
+    }
     await api.saveSettings({
       aiBaseUrl: aiBaseUrl.trim(),
       aiModel: aiModel.trim(),
       aiKey: aiKey.trim(),
       aiExtraPrompt: aiExtraPrompt.trim(),
+      aiRequireConfirmation,
     });
     await refreshBoot();
     toast(t("settings_savedOk"));
@@ -284,6 +297,25 @@ export function SettingsPage() {
           />
           <p className="mt-1 text-[11px] leading-relaxed text-slate-400">{t("settings_extraPromptHint")}</p>
         </div>
+        <label className="mb-4 flex items-start gap-2 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2.5">
+          <input
+            aria-label={t("settings_aiRequireConfirm")}
+            type="checkbox"
+            checked={aiRequireConfirmation}
+            onChange={(e) => {
+              const next = e.target.checked;
+              if (boot?.settings.aiRequireConfirmation && !next) {
+                if (!confirm(t("settings_aiRequireConfirmDisableTip"))) return;
+              }
+              setAiRequireConfirmation(next);
+            }}
+            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+          />
+          <span className="min-w-0 flex-1">
+            <span className="block text-xs font-medium text-slate-700">{t("settings_aiRequireConfirm")}</span>
+            <span className="mt-0.5 block text-[11px] leading-relaxed text-slate-400">{t("settings_aiRequireConfirmHint")}</span>
+          </span>
+        </label>
         <div className="flex items-center gap-2">
           <Btn variant="primary" onClick={saveAi}>
             <Check size={14} /> {t("settings_aiSave")}

@@ -280,7 +280,7 @@ export function TransactionsPage() {
       {/* Table */}
       <div className="min-h-0 flex-1 overflow-auto px-4 pb-10 pt-3 md:px-6">
         <div className="min-w-[980px] overflow-visible rounded-xl border border-slate-200 bg-white shadow-card">
-          <div className={`${gridCls} border-b border-slate-100 bg-slate-50/80`}>
+          <div className={`${gridCls} rounded-t-xl border-b border-slate-100 bg-slate-50/80`}>
             <div className="px-2">
               <input type="checkbox" checked={allPageSelected} onChange={toggleSelectAll} title={t("txp_selectAll")} className="accent-brand-600" />
             </div>
@@ -299,7 +299,7 @@ export function TransactionsPage() {
 
           {data.txs.map((tx) =>
             editingId === tx.id ? (
-              <div key={tx.id} className={`${gridCls} border-b border-slate-50 bg-brand-50/50 px-3 py-1.5`} onKeyDown={(e) => e.key === "Enter" && saveEdit()}>
+              <div key={tx.id} className={`${gridCls} last:rounded-b-xl border-b border-slate-50 bg-brand-50/50 px-3 py-1.5`} onKeyDown={(e) => e.key === "Enter" && saveEdit()}>
                 <div />
                 <button onClick={() => setEditingId(null)} className="mx-auto rounded p-1 text-slate-400 hover:bg-slate-200">
                   <X size={14} />
@@ -333,7 +333,7 @@ export function TransactionsPage() {
             ) : (
               <div
                 key={tx.id}
-                className={`row-hover group ${gridCls} border-b border-slate-50 px-3 py-[7px] transition-colors last:border-b-0 hover:bg-slate-50 ${
+                className={`row-hover group ${gridCls} border-b border-slate-50 px-3 py-[7px] transition-colors last:border-b-0 last:rounded-b-xl hover:bg-slate-50 ${
                   selected.has(tx.id) ? "bg-brand-50/60" : ""
                 }`}
               >
