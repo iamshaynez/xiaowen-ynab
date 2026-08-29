@@ -32,6 +32,7 @@ import {
   confirmPending,
   testAiConnection,
   appendUserMessage,
+  normalizeImages,
 } from "./ai.mjs";
 import {
   CHANNEL_TYPES,
@@ -385,14 +386,27 @@ api.get("/chat/sessions/:id", (req, res) => {
 api.post("/chat/sessions/:id/messages", async (req, res) => {
   const s = getSessionRow(req.params.id);
   if (!s) return bad(res, "session not found");
-  const content = (req.body?.content || "").trim();
-  if (!content) return bad(res, "empty message");
+  const content = (req.body?.content || "").trim().slice(0, 8000);
+  const images = normalizeImages(req.body?.images);
+  if (!content && images.length === 0) return bad(res, "empty message");
 
-  appendUserMessage(s.id, content.slice(0, 8000));
+  // 方案1：图片瞬态不落库，仅当次传给模型，用后即焚
+  appendUserMessage(s.id, content);
 
   try {
-    const result = await runAgent(s.id);
-    res.json({ messages: getSessionMessages(s.id), status: chatStatus(s.id), ...result });
+    const result = await runAgent(s.id, { images });
+    // 为本次响应临时回显图片（前端乐观展示），刷新后不持久化
+    const messages = getSessionMessages(s.id);
+    if (images.length) {
+      // 给刚写入的最后一条 user 消息临时挂上 images，仅用于本次响应
+      for (let i = messages.length - 1; i >= 0; i--) {
+        if (messages[i].role === "user") {
+          messages[i].images = images;
+          break;
+        }
+      }
+    }
+    res.json({ messages, status: chatStatus(s.id), ...result });
   } catch (e) {
     const notConfigured = e.message === "AI_NOT_CONFIGURED";
     res.status(notConfigured ? 400 : 502).json({

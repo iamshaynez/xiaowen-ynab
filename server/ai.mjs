@@ -14,6 +14,50 @@ const MAX_TOOL_RESULT_CHARS = 4000;
 const MAX_HISTORY_MESSAGES = 60;
 const CALL_TIMEOUT_MS = 90000;
 
+// 多模态（方案1：瞬态，不落库）：每条用户消息最多 6 张图，单张 data URL 上限约 8MB
+// 图片仅用于当次 LLM 调用，用后即焚，不写入 chat_messages.images，避免 DB 膨胀与隐私泄露
+export const MAX_IMAGES_PER_MESSAGE = 6;
+export const MAX_IMAGE_DATAURL_CHARS = 8 * 1024 * 1024;
+const ALLOWED_IMAGE_PREFIXES = ["data:image/jpeg;", "data:image/png;", "data:image/webp;", "data:image/gif;"];
+
+export function normalizeImages(raw) {
+  if (!Array.isArray(raw)) return [];
+  const out = [];
+  for (const v of raw) {
+    if (typeof v !== "string") continue;
+    const s = v.trim();
+    if (!s) continue;
+    if (s.length > MAX_IMAGE_DATAURL_CHARS) continue;
+    // 必须是 data:image/*;base64,
+    const lower = s.toLowerCase();
+    const okPrefix = ALLOWED_IMAGE_PREFIXES.some((p) => lower.startsWith(p));
+    if (!okPrefix) continue;
+    if (!s.includes("base64,")) continue;
+    out.push(s);
+    if (out.length >= MAX_IMAGES_PER_MESSAGE) break;
+  }
+  return out;
+}
+
+function parseImagesField(raw) {
+  if (!raw) return null;
+  try {
+    const arr = JSON.parse(raw);
+    if (Array.isArray(arr) && arr.length) return arr;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+// 方案1：启动时清理历史残留的 images（若之前已落库），确保不持久化
+try {
+  const cols = db.prepare("PRAGMA table_info(chat_messages)").all().map((c) => c.name);
+  if (cols.includes("images")) {
+    db.prepare("UPDATE chat_messages SET images=NULL WHERE images IS NOT NULL").run();
+  }
+} catch {}
+
 export function getAiConfig() {
   return {
     baseUrl: getSetting("ai_base_url", "https://api.openai.com/v1"),
@@ -163,6 +207,24 @@ ${extraPrompt}`
   return base;
 }
 
+function imageGuideAddition() {
+  return `
+
+# 视觉能力
+你具备多模态视觉能力，可以直接“看到”用户发送的图片（票据、小票、转账截图、账单、表格等）。
+当用户发送图片时：
+- 仔细识别其中的关键信息：商户/收款方、金额（注意税额/合计/实付）、日期、支付方式/账户、分类线索、订单号等；
+- 金额换算成「分」：¥12.34=1234，小数点后两位，缺失则按 0 补齐；
+- 日期若图片上未写明则回落到「今天」${todayYmd()}，不要臆造；
+- 结合已有的账户/分类信息，选择最匹配的账户与分类；若无法确定则在回复中向用户确认或给出最可能的建议；
+- 随后用 run_sql 工具写入交易（transactions 表），同样需要用户确认才会执行。`;
+}
+
+// 带视觉引导的完整系统提示词
+export function buildSystemPromptWithVision() {
+  return buildSystemPrompt() + imageGuideAddition();
+}
+
 /* ------------------------- SQL safety ------------------------- */
 
 const FORBIDDEN_SQL = /\b(attach|detach|pragma|vacuum|reindex)\b/i;
@@ -202,9 +264,32 @@ function execWrite(sql) {
 
 /* ------------------------- Persistence ------------------------- */
 
-const insMsgStmt = db.prepare(
-  "INSERT INTO chat_messages(id,session_id,role,content,tool_calls,tool_call_id,reasoning_content,pending_sql,pending_purpose,pending_index,resolved,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)"
-);
+let insMsgStmt = null;
+let insHasImages = null;
+function getInsStmt() {
+  if (insMsgStmt) return insMsgStmt;
+  // 兼容迁移前后的表结构：images 列可能尚未存在（老库重启瞬间）
+  try {
+    const cols = db.prepare("PRAGMA table_info(chat_messages)").all().map((c) => c.name);
+    if (cols.includes("images")) {
+      insHasImages = true;
+      insMsgStmt = db.prepare(
+        "INSERT INTO chat_messages(id,session_id,role,content,tool_calls,tool_call_id,reasoning_content,pending_sql,pending_purpose,pending_index,resolved,created_at,images) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)"
+      );
+    } else {
+      insHasImages = false;
+      insMsgStmt = db.prepare(
+        "INSERT INTO chat_messages(id,session_id,role,content,tool_calls,tool_call_id,reasoning_content,pending_sql,pending_purpose,pending_index,resolved,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)"
+      );
+    }
+  } catch {
+    insHasImages = false;
+    insMsgStmt = db.prepare(
+      "INSERT INTO chat_messages(id,session_id,role,content,tool_calls,tool_call_id,reasoning_content,pending_sql,pending_purpose,pending_index,resolved,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)"
+    );
+  }
+  return insMsgStmt;
+}
 
 export function listSessions() {
   return db
@@ -249,11 +334,15 @@ export function getSessionMessages(sessionId) {
 }
 
 export function appendUserMessage(sessionId, content) {
+  const text = String(content || "").trim();
   const s = getSessionRow(sessionId);
   if (s && (!s.title || s.title === "新会话" || s.title === "Untitled" || s.title === "新对话")) {
-    renameSession(sessionId, content.slice(0, 30));
+    const titleSeed = text || "新会话";
+    // 图片记账的标题若无文字，回落到“图片记账”
+    const finalTitle = titleSeed || "图片记账";
+    renameSession(sessionId, finalTitle.slice(0, 30));
   }
-  return addMessage(sessionId, { role: "user", content });
+  return addMessage(sessionId, { role: "user", content: text });
 }
 
 function transformMsg(m) {
@@ -271,6 +360,7 @@ function transformMsg(m) {
     proposedSql: m.pending_sql,
     resolved: m.resolved === 1,
     createdAt: m.created_at,
+    images: parseImagesField(m.images) || null,
   };
 }
 
@@ -280,20 +370,64 @@ function touchSession(sessionId) {
 
 function addMessage(sessionId, fields) {
   const id = uid();
-  insMsgStmt.run(
-    id,
-    sessionId,
-    fields.role,
-    fields.content ?? null,
-    fields.toolCalls ? JSON.stringify(fields.toolCalls) : null,
-    fields.toolCallId ?? null,
-    fields.reasoningContent ?? null,
-    fields.pendingSql ?? null,
-    fields.pendingPurpose ?? null,
-    fields.pendingIndex ?? null,
-    fields.resolved === 0 ? 0 : 1,
-    fields.createdAt ?? nowIso()
-  );
+  const stmt = getInsStmt();
+  const imagesJson = fields.images && fields.images.length ? JSON.stringify(fields.images) : null;
+  try {
+    if (insHasImages) {
+      stmt.run(
+        id,
+        sessionId,
+        fields.role,
+        fields.content ?? null,
+        fields.toolCalls ? JSON.stringify(fields.toolCalls) : null,
+        fields.toolCallId ?? null,
+        fields.reasoningContent ?? null,
+        fields.pendingSql ?? null,
+        fields.pendingPurpose ?? null,
+        fields.pendingIndex ?? null,
+        fields.resolved === 0 ? 0 : 1,
+        fields.createdAt ?? nowIso(),
+        imagesJson
+      );
+    } else {
+      stmt.run(
+        id,
+        sessionId,
+        fields.role,
+        fields.content ?? null,
+        fields.toolCalls ? JSON.stringify(fields.toolCalls) : null,
+        fields.toolCallId ?? null,
+        fields.reasoningContent ?? null,
+        fields.pendingSql ?? null,
+        fields.pendingPurpose ?? null,
+        fields.pendingIndex ?? null,
+        fields.resolved === 0 ? 0 : 1,
+        fields.createdAt ?? nowIso()
+      );
+    }
+  } catch (e) {
+    // 若因列缺失导致失败，回退到无 images 的语句
+    if (String(e.message || "").includes("images")) {
+      insHasImages = false;
+      insMsgStmt = db.prepare(
+        "INSERT INTO chat_messages(id,session_id,role,content,tool_calls,tool_call_id,reasoning_content,pending_sql,pending_purpose,pending_index,resolved,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)"
+      );
+      insMsgStmt.run(
+        id,
+        sessionId,
+        fields.role,
+        fields.content ?? null,
+        fields.toolCalls ? JSON.stringify(fields.toolCalls) : null,
+        fields.toolCallId ?? null,
+        fields.reasoningContent ?? null,
+        fields.pendingSql ?? null,
+        fields.pendingPurpose ?? null,
+        fields.pendingIndex ?? null,
+        fields.resolved === 0 ? 0 : 1,
+        fields.createdAt ?? nowIso()
+      );
+    } else throw e;
+  }
   touchSession(sessionId);
   return id;
 }/* ------------------------- History for LLM ------------------------- */
@@ -302,12 +436,16 @@ function addMessage(sessionId, fields) {
 // 历史数据可能存在悬空调用（旧版 bug、用户未确认就继续提问等），这里统一补齐/清洗。
 const NO_RESULT_TOOL = JSON.stringify({ ok: false, error: "no result was recorded for this tool call" });
 
-export function buildLlmMessages(sessionId) {
+export function buildLlmMessages(sessionId, opts = {}) {
   const rows = db
     .prepare("SELECT * FROM chat_messages WHERE session_id=? ORDER BY created_at, rowid")
     .all(sessionId);
   const recent = rows.slice(-MAX_HISTORY_MESSAGES);
-  const out = [{ role: "system", content: buildSystemPrompt() }];
+  const ephemeralImages = normalizeImages(opts.images || opts.ephemeralImages || []);
+  // 若当次请求携带图片，则使用带视觉指引的系统提示词（瞬态，不依赖历史落库）
+  const hasAnyImage = ephemeralImages.length > 0;
+  const systemContent = hasAnyImage ? buildSystemPromptWithVision() : buildSystemPrompt();
+  const out = [{ role: "system", content: systemContent }];
   let awaiting = [];
 
   const flushAwaiting = () => {
@@ -316,10 +454,33 @@ export function buildLlmMessages(sessionId) {
     }
   };
 
-  for (const m of recent) {
+  // 找到最近一条 user 消息的索引，用于挂载瞬态图片（仅当次生效，不落库）
+  let lastUserIndex = -1;
+  for (let i = recent.length - 1; i >= 0; i--) {
+    if (recent[i].role === "user") {
+      lastUserIndex = i;
+      break;
+    }
+  }
+
+  for (let idx = 0; idx < recent.length; idx++) {
+    const m = recent[idx];
     if (m.role === "user") {
       flushAwaiting();
-      out.push({ role: "user", content: m.content || "" });
+      const isLastUser = idx === lastUserIndex;
+      const images = isLastUser && ephemeralImages.length ? ephemeralImages : null;
+      if (Array.isArray(images) && images.length) {
+        const parts = [];
+        const text = (m.content || "").trim();
+        if (text) parts.push({ type: "text", text });
+        else parts.push({ type: "text", text: "请识别这张图片中的消费/账单信息并按需记账。" });
+        for (const url of images) {
+          parts.push({ type: "image_url", image_url: { url, detail: "auto" } });
+        }
+        out.push({ role: "user", content: parts });
+      } else {
+        out.push({ role: "user", content: m.content || "" });
+      }
     } else if (m.role === "assistant") {
       let calls = null;
       if (m.tool_calls) {
@@ -408,12 +569,12 @@ function truncate(s) {
 
 /* ------------------------- Agent loop ------------------------- */
 
-export async function runAgent(sessionId) {
+export async function runAgent(sessionId, opts = {}) {
   const cfg = getAiConfig();
   if (!cfg.key || !cfg.baseUrl) throw new Error("AI_NOT_CONFIGURED");
 
   for (let i = 0; i < MAX_ITERATIONS; i++) {
-    const llmMessages = buildLlmMessages(sessionId);
+    const llmMessages = buildLlmMessages(sessionId, opts);
     let data;
     try {
       data = await chatCompletion(llmMessages, TOOLS);
