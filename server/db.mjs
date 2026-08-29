@@ -71,8 +71,25 @@ if (!getSetting("initialized")) {
   setSetting("ai_base_url", "https://api.openai.com/v1");
   setSetting("ai_model", "gpt-4o-mini");
   setSetting("ai_key", "");
+  try {
+    const sysTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (sysTz && isValidTimezone(sysTz)) setSetting("timezone", sysTz);
+    else setSetting("timezone", "UTC");
+  } catch {
+    setSetting("timezone", "UTC");
+  }
   seedDefaultCategories();
   setSetting("initialized", "1");
+}
+// 已初始化的老库若缺失时区设置，补一个默认值以保证时钟一致
+if (!getSetting("timezone")) {
+  try {
+    const sysTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (sysTz && isValidTimezone(sysTz)) setSetting("timezone", sysTz);
+    else setSetting("timezone", "UTC");
+  } catch {
+    setSetting("timezone", "UTC");
+  }
 }
 
 function seedDefaultCategories() {
@@ -126,11 +143,29 @@ export function createAccount({ name, type, startingBalance = 0, startingDate = 
   return id;
 }
 
-export function ymd(d) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+export function isValidTimezone(tz) {
+  try {
+    Intl.DateTimeFormat(undefined, { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function getTimezone() {
+  const v = getSetting("timezone", "");
+  if (v && isValidTimezone(v)) return v;
+  try {
+    const sys = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (sys && isValidTimezone(sys)) return sys;
+  } catch {}
+  return "UTC";
+}
+
+export function ymd(d, timeZone) {
+  const tz = timeZone || getTimezone();
+  // en-CA locale formats as YYYY-MM-DD, respected timeZone
+  return new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
 }
 
 export function monthOf(dateStr) {
@@ -145,16 +180,16 @@ export function addMonths(ym, n) {
 
 export function endOfMonth(ymStr) {
   const [y, m] = ymStr.split("-").map(Number);
-  const d = new Date(y, m, 0);
-  return ymd(d);
+  const days = new Date(y, m, 0).getDate();
+  return `${y}-${String(m).padStart(2, "0")}-${String(days).padStart(2, "0")}`;
 }
 
-export function todayYmd() {
-  return ymd(new Date());
+export function todayYmd(timeZone) {
+  return ymd(new Date(), timeZone || getTimezone());
 }
 
-export function currentMonth() {
-  return todayYmd().slice(0, 7);
+export function currentMonth(timeZone) {
+  return todayYmd(timeZone).slice(0, 7);
 }
 
 function mulberry32(seed) {
@@ -205,7 +240,7 @@ export function loadDemoData() {
 
   const monthsBack = 6;
   const now = new Date();
-  const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const thisMonth = currentMonth();
   const months = [];
   for (let i = monthsBack - 1; i >= 0; i--) months.push(addMonths(thisMonth, -i));
 

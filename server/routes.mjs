@@ -9,6 +9,8 @@ import {
   loadDemoData,
   isCreditType,
   todayYmd,
+  getTimezone,
+  isValidTimezone,
 } from "./db.mjs";
 import {
   computeBudget,
@@ -93,6 +95,7 @@ api.get("/bootstrap", (req, res) => {
     settings: {
       currencySymbol: getSetting("currency_symbol", "¥"),
       language: getSetting("language", "zh"),
+      timezone: getSetting("timezone", getTimezone()),
       aiBaseUrl: getSetting("ai_base_url", "https://api.openai.com/v1"),
       aiModel: getSetting("ai_model", "gpt-4o-mini"),
       aiKey: getSetting("ai_key", ""),
@@ -115,6 +118,7 @@ api.get("/settings", (req, res) => {
   res.json({
     currencySymbol: getSetting("currency_symbol", "¥"),
     language: getSetting("language", "zh"),
+    timezone: getSetting("timezone", getTimezone()),
     aiBaseUrl: getSetting("ai_base_url", "https://api.openai.com/v1"),
     aiModel: getSetting("ai_model", "gpt-4o-mini"),
     aiKey: getSetting("ai_key", ""),
@@ -127,6 +131,7 @@ api.put("/settings", (req, res) => {
   const {
     currencySymbol,
     language,
+    timezone,
     aiBaseUrl,
     aiModel,
     aiKey,
@@ -153,6 +158,11 @@ api.put("/settings", (req, res) => {
 
   if (typeof currencySymbol === "string" && currencySymbol.length <= 4) setSetting("currency_symbol", currencySymbol);
   if (language === "zh" || language === "en") setSetting("language", language);
+  if (typeof timezone === "string" && timezone.trim()) {
+    const tz = timezone.trim();
+    if (!isValidTimezone(tz)) return bad(res, "invalid timezone");
+    setSetting("timezone", tz);
+  }
   if (typeof aiBaseUrl === "string" && aiBaseUrl.trim()) setSetting("ai_base_url", aiBaseUrl.trim());
   if (typeof aiModel === "string" && aiModel.trim()) setSetting("ai_model", aiModel.trim());
   if (typeof aiKey === "string") setSetting("ai_key", aiKey.trim());

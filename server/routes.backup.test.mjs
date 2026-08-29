@@ -143,12 +143,11 @@ describe("POST /api/backup/test：R2 连通性测试", () => {
 describe("调度器 syncBackupScheduler", () => {
   it("到点补跑一次并盖当日戳；当日再次 tick 不重复执行", async () => {
     const { syncBackupScheduler, stopBackupScheduler, tickBackupOnce } = await import("./backup.scheduler.mjs");
+    const { ymd, getTimezone } = await import("./db.mjs");
     try {
       await call("PUT", "/api/settings", { backupEnabled: true, backupCronTime: "23:59" });
-      // 把上次调度日拨回前天 → 满足补跑条件
-      const d = new Date(Date.now() - 2 * 864e5);
-      const pad = (n) => String(n).padStart(2, "0");
-      const twoDaysAgo = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+      // 把上次调度日拨回前天 → 满足补跑条件（按配置时区的日历日计算）
+      const twoDaysAgo = ymd(new Date(Date.now() - 2 * 864e5), getTimezone());
       db.prepare("INSERT INTO settings(key,value) VALUES('backup_sched_date',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").run(twoDaysAgo);
 
       syncBackupScheduler(); // 仅启停轮询，不立即执行

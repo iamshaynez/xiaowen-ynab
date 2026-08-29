@@ -42,11 +42,48 @@ export function SettingsPage() {
 
   /* ------------------------- 通用 ------------------------- */
   const [symbol, setSymbol] = useState(boot?.settings.currencySymbol ?? "¥");
+  const [timezone, setTimezone] = useState(boot?.settings.timezone ?? "UTC");
+
+  // 时区选项：优先使用 Intl 提供的完整 IANA 列表，缺失时回落到常用时区
+  const tzOptions = (() => {
+    try {
+      const list = (Intl as unknown as { supportedValuesOf?: (k: string) => string[] }).supportedValuesOf?.("timeZone");
+      if (list && list.length) return list;
+    } catch {}
+    return [
+      "UTC",
+      "Asia/Shanghai",
+      "Asia/Hong_Kong",
+      "Asia/Taipei",
+      "Asia/Tokyo",
+      "Asia/Seoul",
+      "Asia/Singapore",
+      "Asia/Bangkok",
+      "Asia/Kolkata",
+      "Asia/Dubai",
+      "Europe/London",
+      "Europe/Paris",
+      "Europe/Berlin",
+      "Europe/Moscow",
+      "America/New_York",
+      "America/Chicago",
+      "America/Denver",
+      "America/Los_Angeles",
+      "America/Anchorage",
+      "America/Sao_Paulo",
+      "Australia/Sydney",
+      "Pacific/Auckland",
+    ];
+  })();
 
   const saveGeneral = async () => {
-    await api.saveSettings({ currencySymbol: symbol });
-    await refreshBoot();
-    toast(t("settings_savedOk"));
+    try {
+      await api.saveSettings({ currencySymbol: symbol, timezone });
+      await refreshBoot();
+      toast(t("settings_savedOk"));
+    } catch (e) {
+      toast(e instanceof Error ? e.message : t("common_error"), "err");
+    }
   };
 
   /* ------------------------- AI / LLM ------------------------- */
@@ -196,8 +233,22 @@ export function SettingsPage() {
                 onChange={(e) => setSymbol(e.target.value.slice(0, 3))}
                 className={`${inputCls} w-20 text-center`}
               />
-              <Btn onClick={saveGeneral}>{t("common_save")}</Btn>
             </div>
+          </div>
+          <div>
+            <span className="mb-1 block text-xs font-medium text-slate-500">{t("settings_timezone")}</span>
+            <select value={timezone} onChange={(e) => setTimezone(e.target.value)} className={`${inputCls} min-w-[220px]`}>
+              {!tzOptions.includes(timezone) && <option value={timezone}>{timezone}</option>}
+              {tzOptions.map((tz) => (
+                <option key={tz} value={tz}>
+                  {tz}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-[11px] leading-relaxed text-slate-400">{t("settings_timezoneHint")}</p>
+          </div>
+          <div className="flex items-end">
+            <Btn onClick={saveGeneral}>{t("common_save")}</Btn>
           </div>
         </div>
       </Card>

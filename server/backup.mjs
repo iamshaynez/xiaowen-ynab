@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import zlib from "node:zlib";
 import crypto from "node:crypto";
-import { db, getSetting, setSetting, nowIso, DATA_DIR } from "./db.mjs";
+import { db, getSetting, setSetting, nowIso, DATA_DIR, getTimezone, ymd } from "./db.mjs";
 import * as s3Api from "./s3.mjs";
 
 export const BACKUP_DIR_NAME = "backups"; // 位于 DATA_DIR 下，随卷持久化
@@ -181,26 +181,37 @@ export async function runBackupNow(opts = {}) {
 
 /**
  * 调度判定（纯函数）：是否应当在 now 时刻执行一次自动备份。
- * 规则：
+ * 规则（均按配置时区来判定）：
  *  - 未启用或无计划时刻 → 否；
  *  - 当天已由调度器跑过（backup_sched_date === 今天）→ 否；
  *  - 上次调度日期落后一天以上（宕机/挂机错过）→ 立即补跑；
  *  - 其余情况：已过当日的计划时刻 → 是。
  */
-export function shouldRunBackup({ enabled, cronTime, lastRunDate }, now = new Date()) {
+export function shouldRunBackup({ enabled, cronTime, lastRunDate }, now = new Date(), timeZone) {
   if (!enabled || !cronTime) return false;
   const m = /^(\d{1,2}):(\d{2})$/.exec(String(cronTime));
   if (!m) return false;
-  const today = now.getFullYear() + "-" + pad2(now.getMonth() + 1) + "-" + pad2(now.getDate());
+  const tz = timeZone || getTimezone();
+  const today = ymd(now, tz);
   if (lastRunDate === today) return false;
   // 与上次调度日相差 ≥2 个自然日 → 中间有整天没备份（宕机等），启动即补跑
   if (lastRunDate && /^\d{4}-\d{2}-\d{2}$/.test(lastRunDate)) {
-    const [y, mo, d] = lastRunDate.split("-").map(Number);
-    const dayGap = Math.floor(
-      (new Date(now.getFullYear(), now.getMonth(), now.getDate()) - new Date(y, mo - 1, d)) / 864e5
-    );
+    const [y1, mo1, d1] = lastRunDate.split("-").map(Number);
+    const [y2, mo2, d2] = today.split("-").map(Number);
+    const dayGap = Math.floor((Date.UTC(y2, mo2 - 1, d2) - Date.UTC(y1, mo1 - 1, d1)) / 864e5);
     if (dayGap >= 2) return true;
   }
   const cronMin = Number(m[1]) * 60 + Number(m[2]);
-  return now.getHours() * 60 + now.getMinutes() >= cronMin;
+  const curMin = (() => {
+    const parts = new Intl.DateTimeFormat("en-GB", {
+      timeZone: tz,
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).formatToParts(now);
+    const h = Number(parts.find((p) => p.type === "hour")?.value ?? 0);
+    const mi = Number(parts.find((p) => p.type === "minute")?.value ?? 0);
+    return h * 60 + mi;
+  })();
+  return curMin >= cronMin;
 }
