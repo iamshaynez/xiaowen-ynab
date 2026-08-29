@@ -14,8 +14,8 @@ export interface FormState {
   outflow: string;
 }
 
-export const emptyForm = (): FormState => ({
-  date: todayIso(),
+export const emptyForm = (timeZone?: string): FormState => ({
+  date: todayIso(timeZone),
   payeeName: "",
   transferAccountId: "",
   categoryId: "",

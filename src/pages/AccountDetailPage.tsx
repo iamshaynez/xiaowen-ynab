@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { api } from "../api";
 import { useApp } from "../store";
-import { fmtDate, fmtMoney, parseAmountToCents } from "../format";
+import { fmtDate, fmtMoney, parseAmountToCents, todayIso } from "../format";
 import { Btn, Modal, Spinner, Field, inputCls } from "../components/ui";
 import { AmountInput, CategorySelect, PayeeSelect, defaultIncomeCategory, emptyForm, formAmount, incomeCategoryIds, type FormState } from "../components/txEdit";
 import { ACCOUNT_TYPE_LABELS } from "./AccountsPage";
@@ -23,12 +23,23 @@ import type { Tx } from "../types";
 export function AccountDetailPage({ id }: { id: string }) {
   const { boot, t, lang, refreshBoot, toast } = useApp();
   const [reg, setReg] = useState<{ account: { name: string; type: string; balance: number }; transactions: Tx[] } | null>(null);
-  const [form, setForm] = useState<FormState>(emptyForm);
+  const [form, setForm] = useState<FormState>(() => emptyForm());
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState<FormState>(emptyForm);
+  const [editForm, setEditForm] = useState<FormState>(() => emptyForm());
   const [search, setSearch] = useState("");
   const [reconciling, setReconciling] = useState(false);
   const saveRef = useRef(false);
+
+  // 新建表单的日期按系统配置的时区校正
+  useEffect(() => {
+    if (!boot?.settings.timezone) return;
+    const tzDate = todayIso(boot.settings.timezone);
+    setForm((prev) => {
+      const pristine = !prev.payeeName && !prev.transferAccountId && !prev.memo && !prev.inflow && !prev.outflow;
+      if (pristine && prev.date !== tzDate) return { ...prev, date: tzDate };
+      return prev;
+    });
+  }, [boot?.settings.timezone]);
 
   const load = useCallback(async () => {
     setReg(await api.accountRegister(id));
@@ -77,7 +88,7 @@ export function AccountDetailPage({ id }: { id: string }) {
         memo: form.memo,
         amount,
       });
-      setForm(emptyForm());
+      setForm(emptyForm(boot?.settings.timezone));
       await Promise.all([load(), refreshBoot()]);
     } catch {
       toast(t("common_error"), "err");

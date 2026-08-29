@@ -3,6 +3,7 @@ export type Lang = "zh" | "en";
 export interface Settings {
   currencySymbol: string;
   language: Lang;
+  timezone: string;
   aiBaseUrl: string;
   aiModel: string;
   aiKey: string;
