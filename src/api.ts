@@ -90,10 +90,10 @@ export const api = {
   deleteChatSession: (id: string) => req<{ ok: true }>(`/api/chat/sessions/${id}`, { method: "DELETE" }),
   chatSession: (id: string) =>
     req<{ session: ChatSession; messages: ChatMsg[]; status: ChatStatus }>(`/api/chat/sessions/${id}`),
-  sendChatMessage: (id: string, content: string) =>
+  sendChatMessage: (id: string, content: string, images?: string[]) =>
     req<{ messages: ChatMsg[]; status: ChatStatus }>(`/api/chat/sessions/${id}/messages`, {
       method: "POST",
-      body: JSON.stringify({ content }),
+      body: JSON.stringify({ content, images: images || [] }),
     }),
   confirmChat: (id: string, approve: boolean) =>
     req<{ messages: ChatMsg[]; status: ChatStatus; changed?: boolean }>(`/api/chat/sessions/${id}/confirm`, {

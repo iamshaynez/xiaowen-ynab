@@ -169,6 +169,7 @@ export interface ChatMsg {
   proposedSql: string | null;
   resolved: boolean;
   createdAt: string;
+  images?: string[] | null;
 }
 
 export type ChatStatus = "idle" | "awaiting_confirmation";

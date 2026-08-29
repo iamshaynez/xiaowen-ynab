@@ -258,4 +258,14 @@ CREATE INDEX IF NOT EXISTS idx_chat_sessions_channel_lookup ON chat_sessions(cha
       db.exec("ALTER TABLE chat_messages ADD COLUMN reasoning_content TEXT");
     },
   },
+  {
+    // 图片/多模态支持：智能助手与 IM 渠道可发送图片，模型通过 vision 理解票据/账单/截图
+    // 中的金额、日期、商户等信息来记账。新增 images 列存 JSON 数组（data URL 列表），
+    // 随 chat_messages 持久化，并在 buildLlmMessages 中转成 OpenAI 多模态 content。
+    version: 9,
+    name: "chat-images",
+    up: (db) => {
+      db.exec("ALTER TABLE chat_messages ADD COLUMN images TEXT");
+    },
+  },
 ];

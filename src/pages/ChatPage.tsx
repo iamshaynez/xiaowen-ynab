@@ -6,6 +6,7 @@ import {
   Check,
   Database,
   FilePenLine,
+  ImagePlus,
   Loader2,
   Pencil,
   Plus,
@@ -118,8 +119,11 @@ export function ChatPage() {
   const [sending, setSending] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [loadingSession, setLoadingSession] = useState(false);
+  const [pendingImages, setPendingImages] = useState<string[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [dragOver, setDragOver] = useState(false);
 
   const configured = !!boot?.settings.aiKey;
   const openSettings = () => {
@@ -166,9 +170,52 @@ export function ChatPage() {
     taRef.current?.focus();
   };
 
+  const fileToDataUrl = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      if (!file.type.startsWith("image/")) return reject(new Error("not image"));
+      if (file.size > 8 * 1024 * 1024) return reject(new Error("too large"));
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(new Error("read failed"));
+      reader.readAsDataURL(file);
+    });
+
+  const addFiles = async (files: FileList | File[]) => {
+    const arr = Array.from(files);
+    if (pendingImages.length + arr.length > 6) {
+      toast("最多一次发送 6 张图片", "err");
+      return;
+    }
+    const results: string[] = [];
+    for (const f of arr) {
+      if (!f.type.startsWith("image/")) continue;
+      try {
+        const url = await fileToDataUrl(f);
+        results.push(url);
+      } catch {}
+    }
+    if (results.length) setPendingImages((prev) => [...prev, ...results].slice(0, 6));
+  };
+
+  const handlePaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    const files: File[] = [];
+    for (const it of Array.from(items)) {
+      if (it.kind === "file" && it.type.startsWith("image/")) {
+        const f = it.getAsFile();
+        if (f) files.push(f);
+      }
+    }
+    if (files.length) {
+      e.preventDefault();
+      await addFiles(files);
+    }
+  };
+
   const send = async () => {
     const content = input.trim();
-    if (!content || sending) return;
+    if ((!content && pendingImages.length === 0) || sending) return;
     if (!configured) {
       toast(t("chat_notConfigured"), "err");
       openSettings();
@@ -180,12 +227,15 @@ export function ChatPage() {
       sid = session.id;
       setActiveId(sid);
     }
+    const imagesToSend = [...pendingImages];
     setInput("");
+    setPendingImages([]);
     if (taRef.current) taRef.current.style.height = "auto";
     const temp: ChatMsg = {
       id: `tmp-${Date.now()}`,
       role: "user",
       content,
+      images: imagesToSend.length ? imagesToSend : null,
       toolCalls: null,
       toolCallId: null,
       pending: null,
@@ -196,7 +246,7 @@ export function ChatPage() {
     setMessages((ms) => [...ms, temp]);
     setSending(true);
     try {
-      const r = await api.sendChatMessage(sid, content);
+      const r = await api.sendChatMessage(sid, content, imagesToSend);
       setMessages(r.messages);
       loadSessions();
     } catch (e) {
@@ -332,7 +382,20 @@ export function ChatPage() {
         </div>
 
         {/* composer */}
-        <div className="border-t border-slate-200 bg-white px-4 pb-4 pt-3">
+        <div
+          className={`border-t bg-white px-4 pb-4 pt-3 ${dragOver ? "border-brand-300 bg-brand-50/50" : "border-slate-200"}`}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDragOver(true);
+          }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={async (e) => {
+            e.preventDefault();
+            setDragOver(false);
+            const files = e.dataTransfer.files;
+            if (files?.length) await addFiles(files);
+          }}
+        >
           <div className="mx-auto max-w-3xl">
             {!configured && (
               <button
@@ -343,18 +406,54 @@ export function ChatPage() {
                 <Settings2 size={12} className="ml-auto" />
               </button>
             )}
+            {pendingImages.length > 0 && (
+              <div className="mb-2 flex flex-wrap gap-2">
+                {pendingImages.map((src, idx) => (
+                  <div key={idx} className="group relative h-16 w-16 overflow-hidden rounded-lg border border-slate-200">
+                    <img src={src} alt={`preview-${idx}`} className="h-full w-full object-cover" />
+                    <button
+                      onClick={() => setPendingImages((prev) => prev.filter((_, i) => i !== idx))}
+                      className="absolute right-0.5 top-0.5 rounded-full bg-black/60 p-0.5 text-white opacity-80 hover:bg-black/80"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
             <div className="flex items-end gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-card transition-colors focus-within:border-brand-300 focus-within:ring-2 focus-within:ring-brand-100">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={async (e) => {
+                  const files = e.target.files;
+                  if (files?.length) await addFiles(files);
+                  if (e.target) e.target.value = "";
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="mb-0.5 rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-brand-600"
+                title="上传图片"
+              >
+                <ImagePlus size={18} />
+              </button>
               <textarea
                 ref={taRef}
                 rows={1}
                 value={input}
-                placeholder={t("chat_placeholder")}
+                placeholder={pendingImages.length ? "可补充说明，或直接发送图片记账" : t("chat_placeholder")}
                 className="max-h-40 min-h-[38px] flex-1 resize-none bg-transparent px-2 py-2 text-sm outline-none placeholder:text-slate-300"
                 onChange={(e) => {
                   setInput(e.target.value);
                   e.target.style.height = "auto";
                   e.target.style.height = Math.min(e.target.scrollHeight, 160) + "px";
                 }}
+                onPaste={handlePaste}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
                     e.preventDefault();
@@ -362,10 +461,11 @@ export function ChatPage() {
                   }
                 }}
               />
-              <Btn variant="primary" disabled={!input.trim() || sending} onClick={send} className="mb-0.5">
+              <Btn variant="primary" disabled={(!input.trim() && pendingImages.length === 0) || sending} onClick={send} className="mb-0.5">
                 <Send size={14} />
               </Btn>
             </div>
+            <p className="mt-1 text-[11px] text-slate-400">支持粘贴/拖拽图片，模型将自动识别票据信息记账</p>
           </div>
         </div>
       </section>
@@ -481,10 +581,21 @@ function MessageUnitView({
     const m = unit.msg;
     if (m.role === "user")
       return (
-        <div className="anim-pop flex justify-end">
-          <div className="max-w-[85%] whitespace-pre-wrap break-words rounded-2xl rounded-br-md bg-gradient-to-br from-brand-600 to-brand-500 px-4 py-2.5 text-sm text-white shadow-md shadow-brand-600/20">
-            {m.content}
-          </div>
+        <div className="anim-pop flex flex-col items-end gap-2">
+          {m.images && m.images.length > 0 && (
+            <div className="flex max-w-[85%] flex-wrap justify-end gap-2">
+              {m.images.map((src, idx) => (
+                <a key={idx} href={src} target="_blank" rel="noreferrer">
+                  <img src={src} alt={`img-${idx}`} className="h-28 w-auto rounded-xl border border-white/30 object-cover shadow-md" />
+                </a>
+              ))}
+            </div>
+          )}
+          {m.content && (
+            <div className="max-w-[85%] whitespace-pre-wrap break-words rounded-2xl rounded-br-md bg-gradient-to-br from-brand-600 to-brand-500 px-4 py-2.5 text-sm text-white shadow-md shadow-brand-600/20">
+              {m.content}
+            </div>
+          )}
         </div>
       );
     return (
