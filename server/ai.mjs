@@ -66,6 +66,10 @@ export function getAiConfig() {
   };
 }
 
+export function requireConfirmation() {
+  return getSetting("ai_require_confirmation", "1") !== "0";
+}
+
 async function chatCompletion(messages, tools) {
   const { baseUrl, model, key } = getAiConfig();
   if (!key) throw new Error("AI_NOT_CONFIGURED");
@@ -181,7 +185,7 @@ ${groups || "  （暂无分类）"}
 1. 你拥有 run_sql 工具直接操作上述数据库。回答任何数据问题前先 SELECT 查询确认事实，不要凭空猜测。
 2. 只允许单条 SQL；SELECT 建议加 LIMIT；写操作只能是 INSERT/UPDATE/DELETE 单条语句。
 3. 禁止触碰的表：chat_sessions、chat_messages、settings、im_channels。禁止 ATTACH/PRAGMA/VACUUM 等命令。
-4. 任何写操作（INSERT/UPDATE/DELETE）系统会强制弹出用户确认，你只需发起，然后根据工具返回结果继续。
+4. ${requireConfirmation() ? "任何写操作（INSERT/UPDATE/DELETE）系统会强制弹出用户确认，你只需发起，然后根据工具返回结果继续。" : "写操作（INSERT/UPDATE/DELETE）会立即执行、无需用户确认，你发起后会直接收到执行结果，请据此继续并向用户报告变更摘要。"}
 5. 写入后建议 SELECT 验证结果，并向用户报告变更摘要。
 6. 回复使用 Markdown。适合时可用 mermaid 代码块（pie/flowchart/xychart 等）做可视化，例如：
    \`\`\`mermaid
@@ -217,7 +221,7 @@ function imageGuideAddition() {
 - 金额换算成「分」：¥12.34=1234，小数点后两位，缺失则按 0 补齐；
 - 日期若图片上未写明则回落到「今天」${todayYmd()}，不要臆造；
 - 结合已有的账户/分类信息，选择最匹配的账户与分类；若无法确定则在回复中向用户确认或给出最可能的建议；
-- 随后用 run_sql 工具写入交易（transactions 表），同样需要用户确认才会执行。`;
+- 随后用 run_sql 工具写入交易（transactions 表），${requireConfirmation() ? "同样需要用户确认才会执行。" : "会立即执行、无需用户确认。"}`;
 }
 
 // 带视觉引导的完整系统提示词
@@ -523,24 +527,29 @@ export function buildLlmMessages(sessionId, opts = {}) {
   return out;
 }
 
-const TOOLS = [
-  {
-    type: "function",
-    function: {
-      name: "run_sql",
-      description:
-        "Execute one SQL statement against the budget database. SELECT/WITH runs immediately and returns rows. INSERT/UPDATE/DELETE requires explicit user confirmation before it executes.",
-      parameters: {
-        type: "object",
-        properties: {
-          sql: { type: "string", description: "A single SQLite statement. Amounts must be integer cents." },
-          purpose: { type: "string", description: "Short human-readable reason for this statement, shown to the user for confirmation." },
+function getTools() {
+  const writeHint = requireConfirmation()
+    ? "INSERT/UPDATE/DELETE requires explicit user confirmation before it executes."
+    : "INSERT/UPDATE/DELETE executes immediately without confirmation and returns the result.";
+  return [
+    {
+      type: "function",
+      function: {
+        name: "run_sql",
+        description: `Execute one SQL statement against the budget database. SELECT/WITH runs immediately and returns rows. ${writeHint}`,
+        parameters: {
+          type: "object",
+          properties: {
+            sql: { type: "string", description: "A single SQLite statement. Amounts must be integer cents." },
+            purpose: { type: "string", description: "Short human-readable reason for this statement, shown to the user for confirmation." },
+          },
+          required: ["sql"],
         },
-        required: ["sql"],
       },
     },
-  },
-];
+  ];
+}
+const TOOLS = getTools();
 
 function parseToolArgs(call) {
   try {
@@ -577,7 +586,7 @@ export async function runAgent(sessionId, opts = {}) {
     const llmMessages = buildLlmMessages(sessionId, opts);
     let data;
     try {
-      data = await chatCompletion(llmMessages, TOOLS);
+      data = await chatCompletion(llmMessages, getTools());
     } catch (e) {
       addMessage(sessionId, { role: "assistant", content: `⚠️ 调用模型失败：${e.message}` });
       throw e;
@@ -625,6 +634,29 @@ export async function runAgent(sessionId, opts = {}) {
       }
 
       if (writePlan) {
+        if (!requireConfirmation()) {
+          // 自动执行模式：直接写入、无需用户确认，继续让 LLM 汇总结果
+          const writeResult = writePlan.cls.error
+            ? JSON.stringify({ ok: false, error: writePlan.cls.error })
+            : execWrite(writePlan.cls.sql);
+          // 写入的 tool 结果需要与 pending 使用的同一 call.id 对齐，避免悬空 tool_calls
+          addMessage(sessionId, {
+            role: "assistant",
+            content: "",
+            toolCalls: [writePlan.call],
+            reasoningContent: msg.reasoning_content ?? null,
+            pendingSql: writePlan.cls.sql,
+            pendingPurpose: writePlan.purpose,
+            pendingIndex: 0,
+            resolved: 1,
+          });
+          addMessage(sessionId, {
+            role: "tool",
+            toolCallId: writePlan.call.id,
+            content: truncate(writeResult),
+          });
+          continue;
+        }
         addMessage(sessionId, {
           role: "assistant",
           content: "",

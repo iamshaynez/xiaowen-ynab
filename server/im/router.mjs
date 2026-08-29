@@ -1,6 +1,10 @@
-import { db } from "../db.mjs";
+import { db, getSetting } from "../db.mjs";
 import { createSession, appendUserMessage, runAgent, confirmPending, normalizeImages } from "../ai.mjs";
 import { formatForIm } from "./format.mjs";
+
+function requireConfirmation() {
+  return getSetting("ai_require_confirmation", "1") !== "0";
+}
 
 // IM 里用于确认/取消写操作的关键词。
 // 微信「引用回复」会被包装成 “[引用: …] 正文”，这里容忍任意引用前缀与结尾标点，
@@ -112,10 +116,14 @@ export async function handleInbound(channelRow, externalId, text, opts = {}) {
 
     const session = findOrCreateSession(channelRow, externalId);
 
-    if (hasPending(session.id)) {
+    if (requireConfirmation() && hasPending(session.id)) {
       if (CONFIRM_RE.test(trimmed)) return await finishConfirm(channelRow, session.id, true);
       if (CANCEL_RE.test(trimmed)) return await finishConfirm(channelRow, session.id, false);
       return pendingHint(pendingInfo(session.id));
+    }
+    // 免确认模式：若存在上一轮开启确认时遗留的 pending，自动放行执行后继续处理新消息
+    if (!requireConfirmation() && hasPending(session.id)) {
+      await finishConfirm(channelRow, session.id, true);
     }
 
     const mark = snapshot(session.id);
