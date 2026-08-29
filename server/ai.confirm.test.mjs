@@ -13,7 +13,7 @@ setSetting("ai_key", "test-key");
 setSetting("ai_base_url", "http://mock.local/v1");
 setSetting("ai_model", "test-model");
 
-const { createSession, appendUserMessage, confirmPending } = await import("./ai.mjs");
+const { createSession, appendUserMessage, confirmPending, runAgent } = await import("./ai.mjs");
 
 function seedPending(sessionId, sql) {
   db.prepare(
@@ -99,5 +99,46 @@ describe("confirmPending 返回 changed 标记", () => {
     const s = createSession("c4");
     const res = await confirmPending(s.id, true);
     expect(res.changed).toBe(false);
+  });
+
+  it("思考模型的 reasoning_content 会被持久化，供续跑回传", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({
+          choices: [
+            {
+              message: {
+                content: "好的，为你创建一个房贷账户。",
+                reasoning_content: "房贷是贷款类负债，应设为预算外账户。",
+                tool_calls: [
+                  {
+                    id: "call-r",
+                    type: "function",
+                    function: {
+                      name: "run_sql",
+                      arguments: JSON.stringify({ sql: "INSERT INTO accounts(id,name,type,on_budget) VALUES('acc-x','房贷','personalLoan',0)" }),
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        }),
+      }))
+    );
+
+    const s = createSession("c5");
+    appendUserMessage(s.id, "帮我创建一个房贷的账户");
+
+    const res = await runAgent(s.id);
+    expect(res.status).toBe("awaiting_confirmation");
+
+    const rows = db
+      .prepare("SELECT reasoning_content FROM chat_messages WHERE session_id=? AND role='assistant' ORDER BY rowid")
+      .all(s.id);
+    expect(rows.length).toBeGreaterThan(0);
+    for (const r of rows) expect(r.reasoning_content).toBe("房贷是贷款类负债，应设为预算外账户。");
   });
 });
