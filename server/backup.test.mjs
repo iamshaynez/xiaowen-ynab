@@ -105,9 +105,15 @@ describe("shouldRunBackup（调度判定纯函数）", () => {
     expect(shouldRunBackup({ enabled: true, cronTime: "03:00", lastRunDate: "2026-08-25" }, at("2026-08-27T01:00:00"))).toBe(true);
   });
 
-  it("本地时区参与判定（用服务器 Date 构造）", () => {
-    const now = new Date(); // 当下
-    expect(shouldRunBackup({ enabled: true, cronTime: `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`, lastRunDate: ymd(new Date(now.getTime() - 864e5)) }, now)).toBe(true);
+  it("按配置时区判定已过当日计划时刻（而非服务器默认时区）", () => {
+    // now = 2026-08-27T05:00:00Z，在 America/Chicago（8 月为 CDT, UTC-5）是 08-27 00:00
+    const tz = "America/Chicago";
+    const now = new Date("2026-08-27T05:00:00Z");
+    const lastRunDate = ymd(new Date(now.getTime() - 864e5), tz); // Chicago 的昨天 = 2026-08-26
+    // 当前 Chicago 时间 00:00（curMin=0）：计划 01:00 未到点 → 不跑；计划 00:00 已到点 → 跑。
+    // 若误用服务器默认时区（UTC，此刻为 05:00），「01:00」会被错判为已到点 → 由此证明配置时区生效。
+    expect(shouldRunBackup({ enabled: true, cronTime: "01:00", lastRunDate }, now, tz)).toBe(false);
+    expect(shouldRunBackup({ enabled: true, cronTime: "00:00", lastRunDate }, now, tz)).toBe(true);
   });
 });
 
