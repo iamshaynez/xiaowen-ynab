@@ -259,8 +259,10 @@ export function reportsOverview(countMonths = 12) {
 
   const txRows = db
     .prepare(
-      `SELECT t.*, a.on_budget AS ob, a.type AS atype
-       FROM transactions t JOIN accounts a ON a.id=t.account_id`
+      `SELECT t.*, a.on_budget AS ob, a.type AS atype,
+              o.on_budget AS other_ob
+       FROM transactions t JOIN accounts a ON a.id=t.account_id
+       LEFT JOIN accounts o ON o.id = t.transfer_account_id`
     )
     .all();
 
@@ -283,7 +285,14 @@ export function reportsOverview(countMonths = 12) {
     if (!t.ob || t.is_start) continue;
     const m = t.date.slice(0, 7);
     if (!incomeByM.has(m)) continue;
-    if (t.transfer_account_id) continue;
+    // 预算内账户之间互转：预算中立，不进报表。
+    if (t.transfer_account_id && t.other_ob) continue;
+    if (t.transfer_account_id) {
+      // 预算内↔预算外互转：按金额方向归类，避免把无分类流出误判为收入。
+      if (t.amount > 0) incomeByM.set(m, incomeByM.get(m) + t.amount);
+      else expenseByM.set(m, expenseByM.get(m) - t.amount);
+      continue;
+    }
     if (isIncome(t.category_id)) incomeByM.set(m, incomeByM.get(m) + t.amount);
     else if (t.amount < 0) expenseByM.set(m, expenseByM.get(m) - t.amount);
   }
@@ -309,7 +318,9 @@ export function reportsOverview(countMonths = 12) {
   const incomeSourceMap = new Map();
   const catNames = new Map(db.prepare("SELECT id,name FROM categories").all().map((r) => [r.id, r.name]));
   for (const t of txRows) {
-    if (!t.ob || t.is_start || t.transfer_account_id) continue;
+    if (!t.ob || t.is_start) continue;
+    // 预算内账户之间互转：预算中立，不进报表。
+    if (t.transfer_account_id && t.other_ob) continue;
     const m = t.date.slice(0, 7);
     if (m < firstM || m > cur) continue;
     if (t.amount < 0) {
