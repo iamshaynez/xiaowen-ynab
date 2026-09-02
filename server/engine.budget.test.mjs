@@ -87,3 +87,65 @@ describe("computeBudget：期初余额", () => {
     expect(s.readyToAssign).toBe(-2000);
   });
 });
+
+describe("computeBudget：预算内账户与预算外账户之间的转账", () => {
+  beforeEach(() => {
+    db.prepare("DELETE FROM transactions").run();
+    db.prepare("DELETE FROM assignments").run();
+  });
+
+  // 插入一笔预算内↔预算外转账的两条腿。
+  // budgetAmount 为「预算内账户」这一腿的金额：负数=钱从预算内流出；正数=钱流入预算内。
+  function insertBudgetOffBudgetTx(budgetAcc, offBudgetAcc, date, budgetAmount, categoryId = null) {
+    const pairId = uid();
+    const ins = db.prepare(
+      "INSERT INTO transactions(id,account_id,date,payee_name,transfer_account_id,category_id,amount,is_start,pair_id,created_at) VALUES(?,?,?,?,?,?,?,0,?,?)"
+    );
+    ins.run(uid(), budgetAcc, date, "转账", offBudgetAcc, categoryId, budgetAmount, pairId, new Date().toISOString());
+    ins.run(uid(), offBudgetAcc, date, "", budgetAcc, null, -budgetAmount, pairId, new Date().toISOString());
+  }
+
+  it("预算内账户向预算外账户转账且带分类：记为该分类活动，并因超支扣减 Ready to Assign", () => {
+    const checking = createAccount({ name: "储蓄", type: "checking" }); // on_budget=1
+    const invest = createAccount({ name: "基金", type: "investment" }); // on_budget=0
+    insertBudgetOffBudgetTx(checking, invest, `${currentMonth()}-01`, -300000, catId);
+
+    const { byMonth } = computeBudget(currentMonth());
+    const s = byMonth.get(currentMonth());
+    expect(s.activity[catId]).toBe(-300000);
+    expect(s.readyToAssign).toBe(-300000);
+  });
+
+  it("预算内账户向预算外账户转账且不带分类：视为未分类流出，扣减 Ready to Assign", () => {
+    const checking = createAccount({ name: "储蓄", type: "checking" });
+    const invest = createAccount({ name: "基金", type: "investment" });
+    insertBudgetOffBudgetTx(checking, invest, `${currentMonth()}-01`, -500000);
+
+    const { byMonth } = computeBudget(currentMonth());
+    const s = byMonth.get(currentMonth());
+    expect(s.inflow).toBe(0);
+    expect(s.readyToAssign).toBe(-500000);
+  });
+
+  it("预算外账户向预算内账户转账（回款）：计入 Ready to Assign", () => {
+    const checking = createAccount({ name: "储蓄", type: "checking" });
+    const invest = createAccount({ name: "基金", type: "investment" });
+    insertBudgetOffBudgetTx(checking, invest, `${currentMonth()}-02`, 200000);
+
+    const { byMonth } = computeBudget(currentMonth());
+    const s = byMonth.get(currentMonth());
+    expect(s.inflow).toBe(200000);
+    expect(s.readyToAssign).toBe(200000);
+  });
+
+  it("预算内账户之间互转：预算中立，不影响 Ready to Assign", () => {
+    const a = createAccount({ name: "A", type: "checking" });
+    const b = createAccount({ name: "B", type: "checking" });
+    insertBudgetOffBudgetTx(a, b, `${currentMonth()}-03`, -100000);
+
+    const { byMonth } = computeBudget(currentMonth());
+    const s = byMonth.get(currentMonth());
+    expect(s.inflow).toBe(0);
+    expect(s.readyToAssign).toBe(0);
+  });
+});
