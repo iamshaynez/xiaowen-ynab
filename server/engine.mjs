@@ -48,8 +48,10 @@ export function computeBudget(uptoMonth) {
   const months = listMonths(uptoMonth);
   const txRows = db
     .prepare(
-      `SELECT t.*, a.on_budget AS ob, a.type AS atype
-       FROM transactions t JOIN accounts a ON a.id = t.account_id`
+      `SELECT t.*, a.on_budget AS ob, a.type AS atype,
+              o.on_budget AS other_ob
+       FROM transactions t JOIN accounts a ON a.id = t.account_id
+       LEFT JOIN accounts o ON o.id = t.transfer_account_id`
     )
     .all();
   const assignRows = db.prepare("SELECT * FROM assignments").all();
@@ -117,7 +119,15 @@ export function computeBudget(uptoMonth) {
         }
         continue;
       }
-      if (t.transfer_account_id) continue;
+      if (t.transfer_account_id) {
+        // 预算内账户之间互转：预算中立，忽略，不影响 Ready to Assign。
+        if (t.other_ob) continue;
+        // 预算内↔预算外互转：钱进出预算，视同流入/流出处理。
+        if (t.amount > 0) inflow += t.amount;
+        else if (t.category_id) activity.set(t.category_id, (activity.get(t.category_id) || 0) + t.amount);
+        else uncatOutflow += -t.amount;
+        continue;
+      }
       if (t.category_id == null) {
         if (t.amount > 0) inflow += t.amount;
         else uncatOutflow += -t.amount;
