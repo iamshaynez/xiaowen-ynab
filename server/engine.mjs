@@ -113,9 +113,16 @@ export function computeBudget(uptoMonth) {
       if (isCC) {
         if (t.transfer_account_id) {
           if (t.amount > 0) activity.set(ccp, (activity.get(ccp) || 0) - t.amount);
+        } else if (t.category_id && incomeCats.has(t.category_id)) {
+          // 收入流入记在信用卡账户：与借记卡一致计入 Ready to Assign，不动用还款储备。
+          inflow += t.amount;
+          activity.set(t.category_id, (activity.get(t.category_id) || 0) + t.amount);
         } else if (t.category_id) {
           activity.set(t.category_id, (activity.get(t.category_id) || 0) + t.amount);
           activity.set(ccp, (activity.get(ccp) || 0) - t.amount);
+        } else if (t.amount > 0) {
+          // 无分类流入：与借记卡一致计入 Ready to Assign。
+          inflow += t.amount;
         }
         continue;
       }
