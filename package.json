@@ -1,7 +1,7 @@
 {
   "name": "xiaowen-ynab",
   "private": true,
-  "version": "1.2.3",
+  "version": "1.2.4",
   "type": "module",
   "scripts": {
     "predev": "fuser -k 3001/tcp 2>/dev/null || true",
