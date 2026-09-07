@@ -492,6 +492,7 @@ function budgetPayload(month) {
       id: g.id,
       name: g.name,
       virtual: false,
+      isIncome: false,
       categories: g.categories.filter((c) => !c.hidden).map((c) => catView(c.id, { name: c.name, note: c.note })),
     }));
 
@@ -503,9 +504,25 @@ function budgetPayload(month) {
       id: "__cc__",
       name: "__cc__",
       virtual: true,
+      isIncome: false,
       categories: ccAccounts.map((a) => catView(`cc:${a.id}`, { name: a.name, accountId: a.id })),
     });
   }
+
+  // 收入分组始终排在最后：只展示活动，不参与分配/可用金额
+  const incomeGroups = groupsWithCategories()
+    .filter((g) => g.is_income)
+    .map((g) => ({
+      id: g.id,
+      name: g.name,
+      virtual: false,
+      isIncome: true,
+      categories: g.categories
+        .filter((c) => !c.hidden)
+        .map((c) => catView(c.id, { name: c.name, note: c.note, isIncome: true })),
+    }))
+    .filter((g) => g.categories.length > 0);
+  groups.push(...incomeGroups);
 
   const uncategorizedCount = db
     .prepare(
@@ -537,6 +554,7 @@ api.get("/budget/:month", (req, res) => {
 
 api.put("/budget/:month/category/:categoryId/assign", (req, res) => {
   const { month, categoryId } = req.params;
+  if (isIncomeCategory(categoryId)) return bad(res, "cannot assign to income category");
   const cents = Math.round(Number(req.body?.assigned));
   if (!Number.isFinite(cents) || cents < 0) return bad(res, "invalid amount");
   upsertAssignment(month, categoryId, cents);
@@ -550,6 +568,7 @@ function upsertAssignment(month, categoryId, cents) {
 }
 
 function adjustAssignment(month, categoryId, delta) {
+  if (isIncomeCategory(categoryId)) throw new Error("cannot assign to income category");
   if (!categoryId.startsWith("cc:") && !db.prepare("SELECT 1 FROM categories WHERE id=?").get(categoryId)) {
     throw new Error("category not found");
   }
@@ -624,7 +643,7 @@ api.post("/budget/:month/auto-assign", (req, res) => {
     adjustAssignment(month, c.id, amt);
     rta -= amt;
   }
-  const withGoals = flat.filter((c) => !c.id.startsWith("cc:") && c.goal && c.need && c.need.need > 0);
+  const withGoals = flat.filter((c) => !c.isIncome && !c.id.startsWith("cc:") && c.goal && c.need && c.need.need > 0);
   for (const c of withGoals) {
     if (rta <= 0) break;
     const amt = Math.min(c.need.need, rta);
