@@ -91,12 +91,14 @@ export interface BudCategory {
   lastAssigned: number;
   avgSpend: number;
   note?: string;
+  isIncome?: boolean;
 }
 
 export interface BudGroup {
   id: string;
   name: string;
   virtual: boolean;
+  isIncome?: boolean;
   categories: BudCategory[];
 }
 

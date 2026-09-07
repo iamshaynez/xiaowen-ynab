@@ -320,31 +320,48 @@ export function BudgetPage() {
 
         {/* Table body */}
         <div className="flex-1 space-y-4 px-3 py-4">
-          {cur.groups.map((g) => (
-            <GroupBlock
-              key={g.id}
-              group={g}
-              monthsWin={monthsWin}
-              catIndex={catIndex}
-              activeMonth={base}
-              collapsed={collapsed.includes(g.id)}
-              onToggle={() => toggle(g.id)}
-              selection={sel}
-              onSelect={setSel}
-              editing={editing}
-              setEditing={setEditing}
-              onCommitAssign={commitAssign}
-              onMenu={(e, id) => {
-                e.stopPropagation();
-                setGroupMenu({ id, x: e.clientX, y: e.clientY });
-                setAddGroupId(id);
-              }}
-              onQuickAdd={() => {
-                setAddOpen("category");
-                setAddGroupId(g.id);
-              }}
-            />
-          ))}
+          {([
+            { label: t("budget_expenseSection"), groups: cur.groups.filter((g) => !g.isIncome), income: false },
+            { label: t("budget_incomeSection"), groups: cur.groups.filter((g) => g.isIncome), income: true },
+          ] as const)
+            .filter((sec) => sec.groups.length > 0)
+            .map((sec) => (
+              <div key={sec.label} className="space-y-4">
+                <div
+                  className={`px-2 pt-1 text-[11px] font-bold uppercase tracking-widest ${
+                    sec.income ? "text-emerald-500" : "text-slate-400"
+                  }`}
+                >
+                  {sec.label}
+                </div>
+                {sec.groups.map((g) => (
+                  <GroupBlock
+                    key={g.id}
+                    group={g}
+                    income={sec.income}
+                    monthsWin={monthsWin}
+                    catIndex={catIndex}
+                    activeMonth={base}
+                    collapsed={collapsed.includes(g.id)}
+                    onToggle={() => toggle(g.id)}
+                    selection={sel}
+                    onSelect={setSel}
+                    editing={editing}
+                    setEditing={setEditing}
+                    onCommitAssign={commitAssign}
+                    onMenu={(e, id) => {
+                      e.stopPropagation();
+                      setGroupMenu({ id, x: e.clientX, y: e.clientY });
+                      setAddGroupId(id);
+                    }}
+                    onQuickAdd={() => {
+                      setAddOpen("category");
+                      setAddGroupId(g.id);
+                    }}
+                  />
+                ))}
+              </div>
+            ))}
         </div>
       </div>
 
@@ -564,6 +581,7 @@ function MonthHead({
 
 function GroupBlock({
   group,
+  income = false,
   monthsWin,
   catIndex,
   activeMonth,
@@ -578,6 +596,7 @@ function GroupBlock({
   onQuickAdd,
 }: {
   group: BudGroup;
+  income?: boolean;
   monthsWin: string[];
   catIndex: Record<string, Map<string, BudCategory>>;
   activeMonth: string;
@@ -598,7 +617,9 @@ function GroupBlock({
   return (
     <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-card">
       <header
-        className={`${GRID} cursor-pointer bg-slate-50/80 px-3 py-2 transition-colors hover:bg-slate-100/80`}
+        className={`${GRID} cursor-pointer px-3 py-2 transition-colors ${
+          income ? "bg-emerald-50/60 hover:bg-emerald-100/60" : "bg-slate-50/80 hover:bg-slate-100/80"
+        }`}
         onClick={onToggle}
       >
         <div className="flex items-center gap-1.5 pl-1 text-[13px] font-bold text-slate-700">
@@ -632,13 +653,13 @@ function GroupBlock({
           return (
             <div key={m} className={`${MONTH_GRID} col-span-3 rounded-lg py-0.5 ${m === activeMonth && has ? "bg-brand-50" : has ? "bg-slate-100" : ""}`}>
               <div className="num pr-2 text-right text-[13px] font-semibold text-slate-500">
-                {has ? fmtMoney(tot.assigned) : "–"}
+                {has && !income ? fmtMoney(tot.assigned) : "–"}
               </div>
-              <div className="num pr-2 text-right text-[13px] font-semibold text-slate-500">
+              <div className={`num pr-2 text-right text-[13px] font-semibold ${income && has ? "text-emerald-600" : "text-slate-500"}`}>
                 {has ? fmtMoney(tot.activity) : "–"}
               </div>
               <div className="num pr-2 text-right text-[13px] font-bold text-slate-600">
-                {has ? fmtMoney(tot.available) : "–"}
+                {has && !income ? fmtMoney(tot.available) : "–"}
               </div>
             </div>
           );
@@ -651,6 +672,7 @@ function GroupBlock({
               key={c.id}
               catId={c.id}
               name={c.name ?? ""}
+              income={income}
               monthsWin={monthsWin}
               catIndex={catIndex}
               activeMonth={activeMonth}
@@ -687,6 +709,7 @@ function GroupBlock({
 function Row({
   catId,
   name,
+  income = false,
   monthsWin,
   catIndex,
   activeMonth,
@@ -701,6 +724,7 @@ function Row({
 }: {
   catId: string;
   name: string;
+  income?: boolean;
   monthsWin: string[];
   catIndex: Record<string, Map<string, BudCategory>>;
   activeMonth: string;
@@ -742,7 +766,9 @@ function Row({
               </div>
             )}
             <div className="text-right" onClick={(e) => e.stopPropagation()}>
-              {isEditing ? (
+              {income ? (
+                <span className="num block px-2 py-1 text-right text-slate-300">–</span>
+              ) : isEditing ? (
                 <input
                   autoFocus
                   className="cell-input"
@@ -770,8 +796,8 @@ function Row({
               {!cat ? "–" : fmtMoney(cat.activity)}
             </div>
             <div className="pr-2 text-right">
-              <span className={`num rounded-md px-2 py-1 text-[13px] font-semibold ${!cat ? "text-slate-300" : availCls(cat)}`}>
-                {!cat ? "–" : fmtMoney(cat.available)}
+              <span className={`num rounded-md px-2 py-1 text-[13px] font-semibold ${!cat || income ? "text-slate-300" : availCls(cat)}`}>
+                {!cat || income ? "–" : fmtMoney(cat.available)}
               </span>
             </div>
           </div>
@@ -880,68 +906,84 @@ function Inspector({
               }
             />
 
-            <div className={`mt-3 rounded-xl p-3 ${cat.available < 0 ? "bg-rose-50" : "bg-slate-50"}`}>
-              <div className="text-[11px] font-medium uppercase tracking-wide text-slate-400">{t("inspector_available")}</div>
-              <div className={`num mt-0.5 text-3xl font-bold ${cat.available < 0 ? "text-rose-600" : "text-slate-800"}`}>
-                {fmtMoney(cat.available)}
-              </div>
-              <div className="mt-1 text-[11px] text-slate-400">{t("inspector_leftover")}</div>
-              <div className="mt-2 grid grid-cols-2 gap-2 text-[13px]">
-                <div>
-                  <span className="text-slate-400">{t("inspector_assigned")}: </span>
-                  <b className="num text-slate-600">{fmtMoney(cat.assigned)}</b>
+            {cat.isIncome ? (
+              <div className="mt-3 rounded-xl bg-emerald-50 p-3">
+                <div className="text-[11px] font-medium uppercase tracking-wide text-slate-400">{t("inspector_activity")}</div>
+                <div className={`num mt-0.5 text-3xl font-bold ${cat.activity < 0 ? "text-rose-600" : "text-emerald-600"}`}>
+                  {fmtMoney(cat.activity)}
                 </div>
-                <div>
-                  <span className="text-slate-400">{t("inspector_activity")}: </span>
-                  <b className={`num ${cat.activity > 0 ? "text-emerald-600" : "text-slate-600"}`}>{fmtMoney(cat.activity)}</b>
-                </div>
+                <p className="mt-2 text-[11px] leading-relaxed text-slate-400">
+                  {lang === "zh"
+                    ? "收入分类只记录本月活动，流入会自动计入待分配金额，无需分配。"
+                    : "Income categories only track activity. Inflows go straight to Ready to Assign."}
+                </p>
               </div>
-            </div>
+            ) : (
+              <>
+                <div className={`mt-3 rounded-xl p-3 ${cat.available < 0 ? "bg-rose-50" : "bg-slate-50"}`}>
+                  <div className="text-[11px] font-medium uppercase tracking-wide text-slate-400">{t("inspector_available")}</div>
+                  <div className={`num mt-0.5 text-3xl font-bold ${cat.available < 0 ? "text-rose-600" : "text-slate-800"}`}>
+                    {fmtMoney(cat.available)}
+                  </div>
+                  <div className="mt-1 text-[11px] text-slate-400">{t("inspector_leftover")}</div>
+                  <div className="mt-2 grid grid-cols-2 gap-2 text-[13px]">
+                    <div>
+                      <span className="text-slate-400">{t("inspector_assigned")}: </span>
+                      <b className="num text-slate-600">{fmtMoney(cat.assigned)}</b>
+                    </div>
+                    <div>
+                      <span className="text-slate-400">{t("inspector_activity")}: </span>
+                      <b className={`num ${cat.activity > 0 ? "text-emerald-600" : "text-slate-600"}`}>{fmtMoney(cat.activity)}</b>
+                    </div>
+                  </div>
+                </div>
 
-            {cat.available < 0 && (
-              <Btn variant="danger" className="mt-3 w-full" onClick={onCover}>
-                <AlertTriangle size={14} /> {t("budget_cover")} ({fmtMoney(Math.abs(cat.available))})
-              </Btn>
-            )}
-            <Btn className="mt-2 w-full" onClick={onMove}>
-              <ArrowRightLeft size={14} /> {t("inspector_moveBtn")}
-            </Btn>
-
-            <div className="mt-5">
-              <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">{t("inspector_quickAssign")}</div>
-              <div className="space-y-1.5">
-                {cat.need != null && cat.need.need > 0 && (
-                  <QuickBtn label={t("inspector_needTarget", { amt: fmtMoney(cat.need.need) })} onClick={() => assign(cat.need!.need)} />
-                )}
-                <QuickBtn label={t("inspector_lastMonth", { amt: fmtMoney(cat.lastAssigned) })} onClick={() => assign(cat.lastAssigned)} />
-                {cat.avgSpend > 0 && (
-                  <QuickBtn label={t("inspector_avgSpend", { amt: fmtMoney(cat.avgSpend) })} onClick={() => assign(cat.avgSpend)} />
-                )}
-                <div className="flex gap-1.5 pt-1">
-                  <input
-                    className={inputCls + " num"}
-                    placeholder={t("inspector_custom")}
-                    value={custom}
-                    onChange={(e) => setCustom(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        const cents = parseAmountToCents(custom);
-                        if (cents != null && cents >= 0) assign(cents).then(() => setCustom(""));
-                      }
-                    }}
-                  />
-                  <Btn
-                    variant="primary"
-                    onClick={() => {
-                      const cents = parseAmountToCents(custom);
-                      if (cents != null && cents >= 0) assign(cents).then(() => setCustom(""));
-                    }}
-                  >
-                    ✓
+                {cat.available < 0 && (
+                  <Btn variant="danger" className="mt-3 w-full" onClick={onCover}>
+                    <AlertTriangle size={14} /> {t("budget_cover")} ({fmtMoney(Math.abs(cat.available))})
                   </Btn>
+                )}
+                <Btn className="mt-2 w-full" onClick={onMove}>
+                  <ArrowRightLeft size={14} /> {t("inspector_moveBtn")}
+                </Btn>
+
+                <div className="mt-5">
+                  <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">{t("inspector_quickAssign")}</div>
+                  <div className="space-y-1.5">
+                    {cat.need != null && cat.need.need > 0 && (
+                      <QuickBtn label={t("inspector_needTarget", { amt: fmtMoney(cat.need.need) })} onClick={() => assign(cat.need!.need)} />
+                    )}
+                    <QuickBtn label={t("inspector_lastMonth", { amt: fmtMoney(cat.lastAssigned) })} onClick={() => assign(cat.lastAssigned)} />
+                    {cat.avgSpend > 0 && (
+                      <QuickBtn label={t("inspector_avgSpend", { amt: fmtMoney(cat.avgSpend) })} onClick={() => assign(cat.avgSpend)} />
+                    )}
+                    <div className="flex gap-1.5 pt-1">
+                      <input
+                        className={inputCls + " num"}
+                        placeholder={t("inspector_custom")}
+                        value={custom}
+                        onChange={(e) => setCustom(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            const cents = parseAmountToCents(custom);
+                            if (cents != null && cents >= 0) assign(cents).then(() => setCustom(""));
+                          }
+                        }}
+                      />
+                      <Btn
+                        variant="primary"
+                        onClick={() => {
+                          const cents = parseAmountToCents(custom);
+                          if (cents != null && cents >= 0) assign(cents).then(() => setCustom(""));
+                        }}
+                      >
+                        ✓
+                      </Btn>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
+              </>
+            )}
 
             {!cat.id.startsWith("cc:") && (
               <div className="mt-5 border-t border-slate-100 pt-4">
@@ -956,7 +998,7 @@ function Inspector({
               </div>
             )}
 
-            {!cat.id.startsWith("cc:") && (
+            {!cat.id.startsWith("cc:") && !cat.isIncome && (
               <div className="mt-5 border-t border-slate-100 pt-4">
                 <GoalEditor
                   cat={cat}
@@ -1133,7 +1175,7 @@ function MoveMoneyModal({ data, onClose, onDone }: { data: BudgetData; onClose: 
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [amount, setAmount] = useState("");
-  const opts = data.groups.flatMap((g) => [
+  const opts = data.groups.filter((g) => !g.isIncome).flatMap((g) => [
     <optgroup key={g.id} label={g.virtual ? (lang === "zh" ? "信用卡还款" : "Credit Card Payments") : g.name}>
       {g.categories.map((c) => (
         <option key={c.id} value={c.id}>

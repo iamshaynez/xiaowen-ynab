@@ -103,3 +103,41 @@ describe("computeBudget：收入分类路由", () => {
     expect(cur.readyToAssign).toBe(900000);
   });
 });
+
+describe("computeBudget：信用卡账户上的流入", () => {
+  const ccAcc = createAccount({ name: "信用卡", type: "creditCard", startingBalance: 0 });
+
+  function ccTx({ amount, categoryId = null, payee = "x" }) {
+    db.prepare(
+      `INSERT INTO transactions(id,account_id,date,payee_name,transfer_account_id,category_id,memo,amount,is_start,pair_id,created_at)
+       VALUES(?,?,?,?,NULL,?,'',?,0,NULL,?)`
+    ).run(uid(), ccAcc, today, payee, categoryId, amount, new Date().toISOString());
+  }
+
+  it("收入分类流入记在信用卡：计入 inflow 与 Ready to Assign，方向与借记卡一致", () => {
+    ccTx({ amount: 500000, categoryId: salaryCid, payee: "返现" });
+    const s = state();
+    expect(s.inflow).toBe(500000);
+    expect(s.activity[salaryCid]).toBe(500000);
+    expect(s.readyToAssign).toBe(500000);
+    // 不动用信用卡还款储备，不产生超支
+    expect(s.activity[`cc:${ccAcc}`] ?? 0).toBe(0);
+    expect(s.available[`cc:${ccAcc}`] ?? 0).toBe(0);
+  });
+
+  it("信用卡上的退款（正数记回支出分类）保持退款语义：补分类、减还款储备，不进 inflow", () => {
+    ccTx({ amount: -200000, categoryId: spendCid, payee: "刷卡" });
+    ccTx({ amount: 50000, categoryId: spendCid, payee: "退货" });
+    const s = state();
+    expect(s.inflow).toBe(0);
+    expect(s.activity[spendCid]).toBe(-150000);
+    expect(s.activity[`cc:${ccAcc}`]).toBe(150000);
+  });
+
+  it("信用卡上的无分类流入计入 inflow（与借记卡一致）", () => {
+    ccTx({ amount: 30000, categoryId: null });
+    const s = state();
+    expect(s.inflow).toBe(30000);
+    expect(s.readyToAssign).toBe(30000);
+  });
+});

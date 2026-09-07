@@ -128,14 +128,60 @@ describe("PUT /api/category-groups/:id：收入组保护", () => {
   });
 });
 
-describe("GET /api/budget/:month：收入分组不进入可分配列表", () => {
-  it("预算载荷丢弃 is_income 分组，且收入分类不出现在任何组内", async () => {
+describe("GET /api/budget/:month：收入分组在预算载荷中的呈现", () => {
+  beforeAll(() => {
+    db.prepare("DELETE FROM transactions").run();
+    db.prepare("DELETE FROM assignments").run();
+    insertTx({ date: `${currentMonth()}-05`, payee: "工资", amount: 1000000, categoryId: salaryCat });
+  });
+
+  it("支出分组在前、收入分组排在最后，分组带 isIncome 标记", async () => {
     const r = await call("GET", `/api/budget/${currentMonth()}`);
     expect(r.status).toBe(200);
-    expect(r.json.groups.some((g) => g.is_income)).toBe(false);
-    const allIds = r.json.groups.flatMap((g) => g.categories.map((c) => c.id));
-    expect(allIds).not.toContain(salaryCat);
-    expect(allIds).not.toContain(otherIncomeCat);
+    const groups = r.json.groups;
+    const incomeIdx = groups.findIndex((g) => g.isIncome);
+    expect(incomeIdx).toBeGreaterThan(-1);
+    expect(groups.slice(incomeIdx).every((g) => g.isIncome)).toBe(true);
+    expect(groups.slice(0, incomeIdx).every((g) => !g.isIncome)).toBe(true);
+  });
+
+  it("收入分类只携带活动金额：assigned/available 恒为 0，activity 为当月流入", async () => {
+    const r = await call("GET", `/api/budget/${currentMonth()}`);
+    const salary = r.json.groups
+      .filter((g) => g.isIncome)
+      .flatMap((g) => g.categories)
+      .find((c) => c.id === salaryCat);
+    expect(salary.isIncome).toBe(true);
+    expect(salary.assigned).toBe(0);
+    expect(salary.available).toBe(0);
+    expect(salary.activity).toBe(1000000);
+  });
+
+  it("收入活动计入待分配金额", async () => {
+    const r = await call("GET", `/api/budget/${currentMonth()}`);
+    expect(r.json.incomeThisMonth).toBe(1000000);
+    expect(r.json.readyToAssign).toBe(1000000);
+  });
+});
+
+describe("收入分类禁止预算分配", () => {
+  it("PUT assign 给收入分类：拒绝且不写入 assignments", async () => {
+    const r = await call("PUT", `/api/budget/${currentMonth()}/category/${salaryCat}/assign`, { assigned: 5000 });
+    expect(r.status).toBe(400);
+    expect(db.prepare("SELECT COUNT(*) c FROM assignments WHERE category_id=?").get(salaryCat).c).toBe(0);
+  });
+
+  it("POST move 移动资金到收入分类：拒绝", async () => {
+    const r = await call("POST", `/api/budget/${currentMonth()}/move`, { fromId: spendCat, toId: salaryCat, amount: 1000 });
+    expect(r.status).toBe(400);
+  });
+
+  it("POST auto-assign 不会给收入分类分配", async () => {
+    db.prepare("INSERT INTO goals(category_id,type,target) VALUES(?,?,?)").run(salaryCat, "monthly", 100000);
+    const r = await call("POST", `/api/budget/${currentMonth()}/auto-assign`);
+    expect(r.status).toBe(200);
+    expect(db.prepare("SELECT COUNT(*) c FROM assignments WHERE category_id=?").get(salaryCat).c).toBe(0);
+    db.prepare("DELETE FROM goals WHERE category_id=?").run(salaryCat);
   });
 });
 
