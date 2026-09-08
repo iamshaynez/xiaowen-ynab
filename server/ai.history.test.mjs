@@ -7,7 +7,7 @@ import path from "node:path";
 process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "ynab-ai-hist-test-"));
 
 const { db } = await import("./db.mjs");
-const { createSession, buildLlmMessages, splitToolPlans } = await import("./ai.mjs");
+const { createSession, buildLlmMessages, splitToolPlans, buildSystemPrompt } = await import("./ai.mjs");
 
 let seq = 0;
 function seedMsg(sessionId, fields) {
@@ -81,7 +81,7 @@ describe("buildLlmMessages：tool_calls 历史必须完整配对", () => {
     expect(() => assertValidToolSequence(out)).not.toThrow();
   });
 
-  it("末尾悬空的待确认 tool_calls（用户未确认就继续提问）会被合成响应补齐", () => {
+  it("未决的待确认写操作（用户未确认就继续提问）在重建历史时被整体跳过", () => {
     const s = createSession("t2");
     seedMsg(s.id, { role: "user", content: "帮我记一笔支出" });
     seedMsg(s.id, {
@@ -91,12 +91,29 @@ describe("buildLlmMessages：tool_calls 历史必须完整配对", () => {
       pendingSql: "INSERT INTO transactions(id,account_id,date,amount) VALUES('a','b','2026-08-25',-100)",
       resolved: 0,
     });
+    seedMsg(s.id, { role: "user", content: "先别管那个，帮我查下余额" });
 
     const out = buildLlmMessages(s.id);
-    const last = out[out.length - 1];
-    expect(last.role).toBe("tool");
-    expect(last.tool_call_id).toBe("call-p");
-    expect(last.content).toBeTruthy();
+    // 不合成 "no result" 响应，也不带入 tool_calls：避免误导模型认为写操作已失败而重复发起
+    expect(out.some((m) => m.role === "tool" && m.tool_call_id === "call-p")).toBe(false);
+    expect(out.some((m) => m.role === "assistant" && m.tool_calls?.some((c) => c.id === "call-p"))).toBe(false);
+    expect(() => assertValidToolSequence(out)).not.toThrow();
+  });
+
+  it("待确认消息被处理（resolved=1）后，其 tool_calls 与响应正常出现在历史中", () => {
+    const s = createSession("t2b");
+    seedMsg(s.id, { role: "user", content: "帮我记一笔支出" });
+    seedMsg(s.id, {
+      role: "assistant",
+      content: "",
+      toolCalls: [tc("call-q")],
+      pendingSql: "INSERT INTO transactions(id,account_id,date,amount) VALUES('a','b','2026-08-25',-100)",
+      resolved: 1,
+    });
+    seedMsg(s.id, { role: "tool", toolCallId: "call-q", content: '{"ok":true,"changes":1}' });
+
+    const out = buildLlmMessages(s.id);
+    expect(out.some((m) => m.role === "tool" && m.tool_call_id === "call-q")).toBe(true);
     expect(() => assertValidToolSequence(out)).not.toThrow();
   });
 
@@ -137,7 +154,8 @@ describe("buildLlmMessages：tool_calls 历史必须完整配对", () => {
       content: "",
       toolCalls: [tc("call-p")],
       pendingSql: "INSERT INTO accounts(id,name,type,on_budget) VALUES('a','房贷','personalLoan',0)",
-      resolved: 0,
+      // 已确认（resolved=1）并已有 tool 响应；未决（resolved=0）的待确认消息会被整体跳过
+      resolved: 1,
       reasoningContent: "需要执行一条 INSERT 来创建账户。",
     });
     seedMsg(s.id, { role: "tool", toolCallId: "call-p", content: '{"ok":true,"changes":1}' });
@@ -155,17 +173,46 @@ describe("splitToolPlans：写调用不得进入已执行可见列表", () => {
   const readCls = { kind: "read", sql: "SELECT 1" };
   const writeCls = { kind: "write", sql: "INSERT INTO accounts(name) VALUES('x')" };
 
-  it("首个 write 之前的 reads 可执行；write 成为独立待确认计划且不出现在 visibleCalls 中", () => {
+  it("单个写操作：之前的 reads 可执行；write 成为独立待确认计划且不出现在 visibleCalls 中", () => {
+    const plans = [
+      { call: tc("r1"), cls: readCls },
+      { call: tc("w1"), cls: writeCls },
+    ];
+    const { executable, writePlan, visibleCalls, overflow, rejected } = splitToolPlans(plans);
+    expect(executable.map((p) => p.call.id)).toEqual(["r1"]);
+    expect(writePlan?.call.id).toBe("w1");
+    // 回归关键：若写调用混入 visibleCalls，持久化的 assistant 消息将永远等不到 tool 响应（LLM 400）
+    expect(visibleCalls.map((c) => c.id)).toEqual(["r1"]);
+    expect(overflow).toEqual([]);
+    expect(rejected).toEqual([]);
+  });
+
+  it("单次多个写操作：整批拒绝，所有调用进入 visibleCalls 并携带明确错误，不执行任何语句", () => {
     const plans = [
       { call: tc("r1"), cls: readCls },
       { call: tc("w1"), cls: writeCls },
       { call: tc("w2"), cls: writeCls },
     ];
-    const { executable, writePlan, visibleCalls } = splitToolPlans(plans);
+    const { executable, writePlan, visibleCalls, rejected, batchError } = splitToolPlans(plans);
+    expect(executable).toEqual([]);
+    expect(writePlan).toBeNull();
+    expect(visibleCalls.map((c) => c.id)).toEqual(["r1", "w1", "w2"]);
+    expect(rejected.map((p) => p.call.id)).toEqual(["r1", "w1", "w2"]);
+    expect(batchError).toBeTruthy();
+  });
+
+  it("写操作之后的尾随调用不被静默丢弃：进入 visibleCalls 并标记为 overflow", () => {
+    const plans = [
+      { call: tc("r1"), cls: readCls },
+      { call: tc("w1"), cls: writeCls },
+      { call: tc("r2"), cls: readCls },
+    ];
+    const { executable, writePlan, visibleCalls, overflow } = splitToolPlans(plans);
     expect(executable.map((p) => p.call.id)).toEqual(["r1"]);
     expect(writePlan?.call.id).toBe("w1");
-    // 回归关键：若写调用混入 visibleCalls，持久化的 assistant 消息将永远等不到 tool 响应（LLM 400）
-    expect(visibleCalls.map((c) => c.id)).toEqual(["r1"]);
+    expect(overflow.map((p) => p.call.id)).toEqual(["r2"]);
+    // 尾随调用必须持久化进 assistant.tool_calls，否则其错误响应会成为孤儿 tool 消息
+    expect(visibleCalls.map((c) => c.id)).toEqual(["r1", "r2"]);
   });
 
   it("没有写操作时全部可执行", () => {
@@ -173,9 +220,17 @@ describe("splitToolPlans：写调用不得进入已执行可见列表", () => {
       { call: tc("r1"), cls: readCls },
       { call: tc("r2"), cls: readCls },
     ];
-    const { executable, writePlan, visibleCalls } = splitToolPlans(plans);
+    const { executable, writePlan, visibleCalls, overflow, rejected } = splitToolPlans(plans);
     expect(writePlan).toBeNull();
     expect(visibleCalls.map((c) => c.id)).toEqual(["r1", "r2"]);
     expect(executable).toHaveLength(2);
+    expect(overflow).toEqual([]);
+    expect(rejected).toEqual([]);
+  });
+});
+
+describe("buildSystemPrompt：写操作约束", () => {
+  it("系统提示词明确限制单次最多发起 1 个写操作", () => {
+    expect(buildSystemPrompt()).toContain("最多发起 1 个写操作");
   });
 });
