@@ -183,7 +183,7 @@ ${groups || "  （暂无分类）"}
 
 # 工作规则
 1. 你拥有 run_sql 工具直接操作上述数据库。回答任何数据问题前先 SELECT 查询确认事实，不要凭空猜测。
-2. 只允许单条 SQL；SELECT 建议加 LIMIT；写操作只能是 INSERT/UPDATE/DELETE 单条语句。
+2. 只允许单条 SQL；SELECT 建议加 LIMIT；写操作只能是 INSERT/UPDATE/DELETE 单条语句。单次回复最多发起 1 个写操作——若需要多个写操作请分轮进行（先发起一个，收到结果后再发起下一个），否则整批会被拒绝。
 3. 禁止触碰的表：chat_sessions、chat_messages、settings、im_channels。禁止 ATTACH/PRAGMA/VACUUM 等命令。
 4. ${requireConfirmation() ? "任何写操作（INSERT/UPDATE/DELETE）系统会强制弹出用户确认，你只需发起，然后根据工具返回结果继续。" : "写操作（INSERT/UPDATE/DELETE）会立即执行、无需用户确认，你发起后会直接收到执行结果，请据此继续并向用户报告变更摘要。"}
 5. 写入后建议 SELECT 验证结果，并向用户报告变更摘要。
@@ -499,6 +499,9 @@ export function buildLlmMessages(sessionId, opts = {}) {
         out.push({ role: "user", content: m.content || "" });
       }
     } else if (m.role === "assistant") {
+      // 未决的待确认写操作整体跳过：该写操作尚未被执行也未被拒绝，
+      // 若带入历史会被 flushAwaiting 合成 "no result"，误导模型认为写入失败而重复发起
+      if (m.resolved === 0 && m.pending_sql) continue;
       let calls = null;
       if (m.tool_calls) {
         try {
@@ -549,7 +552,7 @@ function getTools() {
       type: "function",
       function: {
         name: "run_sql",
-        description: `Execute one SQL statement against the budget database. SELECT/WITH runs immediately and returns rows. ${writeHint}`,
+        description: `Execute one SQL statement against the budget database. SELECT/WITH runs immediately and returns rows. ${writeHint} Issue at most ONE write per request — a request containing multiple writes is rejected entirely; do multiple writes across separate turns.`,
         parameters: {
           type: "object",
           properties: {
@@ -574,15 +577,36 @@ function parseToolArgs(call) {
   }
 }
 
-// 拆分工具调用计划：首个写操作之前的读语句立即执行；写操作单独等待用户确认。
+export const MULTI_WRITE_ERROR =
+  "rejected: only one write (INSERT/UPDATE/DELETE) per request is allowed; please issue the remaining writes in separate turns（单次请求最多只能发起 1 个写操作，请分轮重试）";
+export const AFTER_WRITE_ERROR =
+  "not executed: this call follows a write operation in the same request and was discarded; please retry it in the next turn（该调用排在写操作之后，本轮未执行，请下一轮重试）";
+
+// 拆分工具调用计划：
+// - 单次发起多个写操作 → 整批拒绝（rejected），所有调用都收到明确错误，不执行任何语句；
+// - 单个写操作 → 首个写操作之前的读语句立即执行，写操作单独等待确认/自动执行；
+//   写操作之后的尾随调用（overflow）不静默丢弃，而是附带明确错误响应。
 // 关键约束：写调用绝不能混入 visibleCalls，否则持久化的 assistant(tool_calls)
 // 消息将永远等不到 tool 响应，后续每次请求都会触发 LLM 400。
 export function splitToolPlans(plans) {
-  const firstWriteIdx = plans.findIndex((p) => !p.cls.error && p.cls.kind === "write");
+  const isWrite = (p) => !p.cls.error && p.cls.kind === "write";
+  const writeCount = plans.filter(isWrite).length;
+  if (writeCount > 1) {
+    return {
+      executable: [],
+      writePlan: null,
+      visibleCalls: plans.map((p) => p.call),
+      overflow: [],
+      rejected: plans,
+      batchError: MULTI_WRITE_ERROR,
+    };
+  }
+  const firstWriteIdx = plans.findIndex(isWrite);
   const executable = firstWriteIdx === -1 ? plans : plans.slice(0, firstWriteIdx);
   const writePlan = firstWriteIdx === -1 ? null : plans[firstWriteIdx];
-  const visibleCalls = executable.map((p) => p.call);
-  return { executable, writePlan, visibleCalls };
+  const overflow = firstWriteIdx === -1 ? [] : plans.slice(firstWriteIdx + 1);
+  const visibleCalls = [...executable, ...overflow].map((p) => p.call);
+  return { executable, writePlan, visibleCalls, overflow, rejected: [], batchError: null };
 }
 
 function truncate(s) {
@@ -621,13 +645,22 @@ export async function runAgent(sessionId, opts = {}) {
         const { sql, purpose } = parseToolArgs(call);
         return { call, sql, purpose, cls: classifySql(sql) };
       });
-      const { executable, writePlan, visibleCalls } = splitToolPlans(plans);
+      const { executable, writePlan, visibleCalls, overflow, rejected, batchError } = splitToolPlans(plans);
       addMessage(sessionId, {
         role: "assistant",
         content: msg.content || "",
         toolCalls: visibleCalls,
         reasoningContent: msg.reasoning_content ?? null,
       });
+
+      // 多写整批拒绝：给每个调用明确的错误响应，让模型分轮重试，绝不静默丢弃
+      for (const p of rejected) {
+        addMessage(sessionId, {
+          role: "tool",
+          toolCallId: p.call.id,
+          content: truncate(JSON.stringify({ ok: false, error: p.cls.error || batchError })),
+        });
+      }
 
       let stopped = false;
       for (const p of executable) {
@@ -644,6 +677,15 @@ export async function runAgent(sessionId, opts = {}) {
             content: truncate(execRead(p.cls.sql)),
           });
         }
+      }
+
+      // 写操作之后的尾随调用：附带明确错误响应，提示模型下一轮重试
+      for (const p of overflow) {
+        addMessage(sessionId, {
+          role: "tool",
+          toolCallId: p.call.id,
+          content: truncate(JSON.stringify({ ok: false, error: p.cls.error || AFTER_WRITE_ERROR })),
+        });
       }
 
       if (writePlan) {
@@ -705,7 +747,18 @@ export async function confirmPending(sessionId, approve) {
     .get(sessionId);
   if (!row) return { status: "idle", changed: false };
 
-  const call = JSON.parse(row.tool_calls)[0];
+  // 严格校验目标调用：找不到合法 tool_call_id 时抛显式异常且不产生任何半状态
+  // （不标 resolved、不执行 SQL、不写 tool 消息），避免出现"已确认却无配对响应"的协议断层
+  let call = null;
+  try {
+    const parsed = JSON.parse(row.tool_calls || "[]");
+    if (Array.isArray(parsed)) call = parsed[row.pending_index ?? 0] ?? null;
+  } catch {
+    call = null;
+  }
+  if (!call || !call.id) {
+    throw new Error(`PENDING_TOOL_CALL_MISSING: message ${row.id} has no valid tool call to resolve`);
+  }
   db.prepare("UPDATE chat_messages SET resolved=1 WHERE id=?").run(row.id);
 
   let result;

@@ -215,7 +215,7 @@ export function ChatPage() {
 
   const send = async () => {
     const content = input.trim();
-    if ((!content && pendingImages.length === 0) || sending) return;
+    if ((!content && pendingImages.length === 0) || sending || awaiting) return;
     if (!configured) {
       toast(t("chat_notConfigured"), "err");
       openSettings();
@@ -446,8 +446,9 @@ export function ChatPage() {
                 ref={taRef}
                 rows={1}
                 value={input}
+                disabled={awaiting}
                 placeholder={pendingImages.length ? "可补充说明，或直接发送图片记账" : t("chat_placeholder")}
-                className="max-h-40 min-h-[38px] flex-1 resize-none bg-transparent px-2 py-2 text-sm outline-none placeholder:text-slate-300"
+                className="max-h-40 min-h-[38px] flex-1 resize-none bg-transparent px-2 py-2 text-sm outline-none placeholder:text-slate-300 disabled:cursor-not-allowed disabled:opacity-50"
                 onChange={(e) => {
                   setInput(e.target.value);
                   e.target.style.height = "auto";
@@ -461,11 +462,18 @@ export function ChatPage() {
                   }
                 }}
               />
-              <Btn variant="primary" disabled={(!input.trim() && pendingImages.length === 0) || sending} onClick={send} className="mb-0.5">
+              <Btn
+                variant="primary"
+                disabled={(!input.trim() && pendingImages.length === 0) || sending || awaiting}
+                onClick={send}
+                className="mb-0.5"
+              >
                 <Send size={14} />
               </Btn>
             </div>
-            <p className="mt-1 text-[11px] text-slate-400">支持粘贴/拖拽图片，模型将自动识别票据信息记账</p>
+            <p className="mt-1 text-[11px] text-slate-400">
+              {awaiting ? t("chat_awaitingConfirm") : "支持粘贴/拖拽图片，模型将自动识别票据信息记账"}
+            </p>
           </div>
         </div>
       </section>

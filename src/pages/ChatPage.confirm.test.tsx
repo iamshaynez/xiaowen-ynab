@@ -75,4 +75,17 @@ describe("ChatPage 确认执行后刷新全局数据", () => {
     await new Promise((r) => setTimeout(r, 20));
     expect(h.refreshBoot).not.toHaveBeenCalled();
   });
+
+  it("存在待确认操作时禁用输入与发送，并提示先处理待确认项", async () => {
+    render(<ChatPage />);
+    fireEvent.click(await screen.findByText("测试会话"));
+    await screen.findByText("chat_confirmBtn");
+
+    expect(screen.getByText("chat_awaitingConfirm")).toBeTruthy();
+    const ta = screen.getByPlaceholderText("chat_placeholder");
+    expect(ta).toHaveProperty("disabled", true);
+    fireEvent.change(ta, { target: { value: "你好" } });
+    const sendBtn = document.querySelector(".lucide-send")!.closest("button")!;
+    expect(sendBtn).toHaveProperty("disabled", true);
+  });
 });

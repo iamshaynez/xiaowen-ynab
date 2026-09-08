@@ -38,6 +38,13 @@ function lastPendingRow(sessionId) {
     .get(sessionId);
 }
 
+// 种入 tool_calls 内容可自定义的 pending 行（模拟损坏/旧数据）
+function seedRawPending(sessionId, sql, toolCallsJson) {
+  db.prepare(
+    "INSERT INTO chat_messages(id,session_id,role,content,tool_calls,tool_call_id,pending_sql,pending_purpose,pending_index,resolved,created_at) VALUES(?,?,?,?,?,?,?,?,0,?,?)"
+  ).run(uid(), sessionId, "assistant", "", toolCallsJson, null, sql, "测试写入", 0, new Date().toISOString());
+}
+
 afterEach(() => {
   vi.unstubAllGlobals();
 });
@@ -140,5 +147,104 @@ describe("confirmPending 返回 changed 标记", () => {
       .all(s.id);
     expect(rows.length).toBeGreaterThan(0);
     for (const r of rows) expect(r.reasoning_content).toBe("房贷是贷款类负债，应设为预算外账户。");
+  });
+});
+
+describe("confirmPending 数据流一致性", () => {
+  it("tool_calls 为空数组 → 抛显式错误，不产生半状态（不标 resolved、不写 tool 消息、不执行 SQL）", async () => {
+    const s = createSession("c6");
+    appendUserMessage(s.id, "记一笔");
+    seedRawPending(s.id, "INSERT INTO accounts(id,name,type) VALUES('acc-c6','坏数据','checking')", "[]");
+
+    await expect(confirmPending(s.id, true)).rejects.toThrow();
+
+    expect(lastPendingRow(s.id)).toBeTruthy(); // resolved 仍为 0，未被半标记
+    expect(
+      db.prepare("SELECT COUNT(*) c FROM chat_messages WHERE session_id=? AND role='tool'").get(s.id).c
+    ).toBe(0);
+    expect(db.prepare("SELECT id FROM accounts WHERE id='acc-c6'").get()).toBeFalsy();
+  });
+
+  it("tool_calls 为非法 JSON → 抛显式错误，不产生半状态", async () => {
+    const s = createSession("c6b");
+    appendUserMessage(s.id, "记一笔");
+    seedRawPending(s.id, "INSERT INTO accounts(id,name,type) VALUES('acc-c6b','坏数据','checking')", "not-json{{");
+
+    await expect(confirmPending(s.id, true)).rejects.toThrow();
+
+    expect(lastPendingRow(s.id)).toBeTruthy();
+    expect(
+      db.prepare("SELECT COUNT(*) c FROM chat_messages WHERE session_id=? AND role='tool'").get(s.id).c
+    ).toBe(0);
+    expect(db.prepare("SELECT id FROM accounts WHERE id='acc-c6b'").get()).toBeFalsy();
+  });
+});
+
+describe("runAgent 多写操作整批拒绝", () => {
+  it("模型单次发起多个写操作 → 所有调用收到明确错误，不产生任何写入，模型可重试", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          choices: [
+            {
+              message: {
+                content: "",
+                tool_calls: [
+                  {
+                    id: "call-w1",
+                    type: "function",
+                    function: {
+                      name: "run_sql",
+                      arguments: JSON.stringify({
+                        sql: "INSERT INTO accounts(id,name,type) VALUES('acc-w1','甲','checking')",
+                        purpose: "建甲",
+                      }),
+                    },
+                  },
+                  {
+                    id: "call-w2",
+                    type: "function",
+                    function: {
+                      name: "run_sql",
+                      arguments: JSON.stringify({
+                        sql: "INSERT INTO accounts(id,name,type) VALUES('acc-w2','乙','checking')",
+                        purpose: "建乙",
+                      }),
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ choices: [{ message: { content: "抱歉，我分轮执行。" } }] }),
+      });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const s = createSession("c7");
+    appendUserMessage(s.id, "帮我建两个账户");
+    const res = await runAgent(s.id);
+
+    expect(res.status).toBe("idle");
+    // 没有任何写入落库
+    expect(db.prepare("SELECT id FROM accounts WHERE id IN ('acc-w1','acc-w2')").all()).toHaveLength(0);
+    // 两个调用都收到了明确的错误响应（拒绝静默丢弃）
+    const tools = db
+      .prepare("SELECT tool_call_id, content FROM chat_messages WHERE session_id=? AND role='tool' ORDER BY rowid")
+      .all(s.id);
+    expect(tools.map((t) => t.tool_call_id)).toEqual(["call-w1", "call-w2"]);
+    for (const t of tools) expect(t.content).toContain("one write");
+    // assistant 消息同时携带两个调用，协议配对完整
+    const assistants = db
+      .prepare("SELECT tool_calls FROM chat_messages WHERE session_id=? AND role='assistant' AND tool_calls IS NOT NULL")
+      .all(s.id);
+    const allIds = assistants.flatMap((a) => JSON.parse(a.tool_calls).map((c) => c.id));
+    expect(allIds).toEqual(expect.arrayContaining(["call-w1", "call-w2"]));
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });
