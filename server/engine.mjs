@@ -48,10 +48,11 @@ export function computeBudget(uptoMonth) {
   const months = listMonths(uptoMonth);
   const txRows = db
     .prepare(
-      `SELECT t.*, a.on_budget AS ob, a.type AS atype,
-              o.on_budget AS other_ob
+      `SELECT t.*, t.rowid AS rid, a.on_budget AS ob, a.type AS atype,
+              a.starting_balance AS sbal, o.on_budget AS other_ob
        FROM transactions t JOIN accounts a ON a.id = t.account_id
-       LEFT JOIN accounts o ON o.id = t.transfer_account_id`
+       LEFT JOIN accounts o ON o.id = t.transfer_account_id
+       ORDER BY t.date, t.rowid`
     )
     .all();
   const assignRows = db.prepare("SELECT * FROM assignments").all();
@@ -90,6 +91,7 @@ export function computeBudget(uptoMonth) {
 
   let carry = 0;
   let prevAvail = new Map();
+  const ccBal = new Map(); // 每张信用卡的运行余额（期初欠款为负），跨月延续
   const results = new Map();
 
   for (const month of months) {
@@ -98,31 +100,72 @@ export function computeBudget(uptoMonth) {
 
     let inflow = 0;
     let uncatOutflow = 0;
+    let ccShortfall = 0; // 偿债/抵债超出还款储备的部分：由 Ready to Assign 显式承担
     const activity = new Map();
     const ids = catIds();
     for (const id of ids) activity.set(id, 0);
 
+    let assignedTotal = 0;
+    const assignedMap = new Map();
+    for (const id of ids) {
+      const a = assigns.get(id) || 0;
+      assignedMap.set(id, a);
+      assignedTotal += a;
+    }
+
+    // 信用卡账户首次进入计算时：以期初余额初始化运行余额，
+    // 并把期初欠款等额注入还款储备（开户时已扣减 Ready to Assign，储备备偿避免双重计费）。
+    const ccInit = (accId, sbal) => {
+      if (ccBal.has(accId)) return;
+      const sb = sbal ?? 0;
+      ccBal.set(accId, sb);
+      const open = Math.max(0, -sb);
+      if (open) activity.set(`cc:${accId}`, (activity.get(`cc:${accId}`) || 0) + open);
+    };
+
     for (const t of monthTx) {
+      const isCreditAcc = t.atype === "creditCard" || t.atype === "lineOfCredit";
+      const ccp = `cc:${t.account_id}`;
       if (t.is_start) {
-        // 期初余额：预算内账户的初始资金计入可分配资金（正增负减）
+        // 期初余额：预算内账户的初始资金计入可分配资金（正增负减）。
+        if (isCreditAcc) ccInit(t.account_id, t.sbal);
         inflow += t.amount;
         continue;
       }
-      const isCC = t.atype === "creditCard" || t.atype === "lineOfCredit";
-      const ccp = `cc:${t.account_id}`;
-      if (isCC) {
-        if (t.transfer_account_id) {
-          if (t.amount > 0) activity.set(ccp, (activity.get(ccp) || 0) - t.amount);
-        } else if (t.category_id && incomeCats.has(t.category_id)) {
-          // 收入流入记在信用卡账户：与借记卡一致计入 Ready to Assign，不动用还款储备。
-          inflow += t.amount;
-          activity.set(t.category_id, (activity.get(t.category_id) || 0) + t.amount);
-        } else if (t.category_id) {
-          activity.set(t.category_id, (activity.get(t.category_id) || 0) + t.amount);
-          activity.set(ccp, (activity.get(ccp) || 0) - t.amount);
-        } else if (t.amount > 0) {
-          // 无分类流入：与借记卡一致计入 Ready to Assign。
-          inflow += t.amount;
+      if (isCreditAcc) {
+        // 交易本身对预算信封的影响：分类/流入口径与借记卡一致；
+        // 对侧为预算外账户时同预算内↔预算外互转（钱实质进出预算）；卡间还款转账无直接影响。
+        if (!t.transfer_account_id) {
+          if (t.category_id && incomeCats.has(t.category_id)) {
+            inflow += t.amount;
+            activity.set(t.category_id, (activity.get(t.category_id) || 0) + t.amount);
+          } else if (t.category_id) {
+            activity.set(t.category_id, (activity.get(t.category_id) || 0) + t.amount);
+          } else if (t.amount > 0) {
+            inflow += t.amount;
+          } else {
+            uncatOutflow += -t.amount;
+          }
+        } else if (!t.other_ob) {
+          if (t.amount > 0) inflow += t.amount;
+          else if (t.category_id) activity.set(t.category_id, (activity.get(t.category_id) || 0) + t.amount);
+          else uncatOutflow += -t.amount;
+        }
+        // 余额驱动的债务增减：债务增加（刷出欠款）等额攒储备；
+        // 债务减少（还款/退款/收入流入）从储备释放，储备不足的部分由 RTA 承担。
+        ccInit(t.account_id, t.sbal);
+        const balBefore = ccBal.get(t.account_id);
+        const balAfter = balBefore + t.amount;
+        ccBal.set(t.account_id, balAfter);
+        const debtBefore = Math.max(0, -balBefore);
+        const debtAfter = Math.max(0, -balAfter);
+        if (debtAfter > debtBefore) {
+          activity.set(ccp, (activity.get(ccp) || 0) + (debtAfter - debtBefore));
+        } else if (debtBefore > debtAfter) {
+          const reserveAvail = (prevAvail.get(ccp) || 0) + (assignedMap.get(ccp) || 0) + (activity.get(ccp) || 0);
+          const release = Math.min(debtBefore - debtAfter, Math.max(reserveAvail, 0));
+          activity.set(ccp, (activity.get(ccp) || 0) - release);
+          ccShortfall += debtBefore - debtAfter - release;
         }
         continue;
       }
@@ -148,15 +191,7 @@ export function computeBudget(uptoMonth) {
       activity.set(t.category_id, (activity.get(t.category_id) || 0) + t.amount);
     }
 
-    let assignedTotal = 0;
-    const assignedMap = new Map();
-    for (const id of ids) {
-      const a = assigns.get(id) || 0;
-      assignedMap.set(id, a);
-      assignedTotal += a;
-    }
-
-    let rta = carry + inflow - assignedTotal - uncatOutflow;
+    let rta = carry + inflow - assignedTotal - uncatOutflow - ccShortfall;
 
     const avail = new Map();
     let overspent = 0;

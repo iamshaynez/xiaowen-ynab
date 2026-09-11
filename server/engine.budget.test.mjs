@@ -79,12 +79,13 @@ describe("computeBudget：期初余额", () => {
     expect(s.readyToAssign).toBe(50000);
   });
 
-  it("负债账户的负期初余额作为负流入扣减 Ready to Assign", () => {
+  it("负债账户的负期初余额作为负流入扣减 Ready to Assign，并注入等额还款储备", () => {
     const cc = createAccount({ name: "信用卡", type: "creditCard", startingBalance: -2000, startingDate: `${currentMonth()}-01` });
     const { byMonth } = computeBudget(currentMonth());
     const s = byMonth.get(currentMonth());
     expect(s.inflow).toBe(-2000);
     expect(s.readyToAssign).toBe(-2000);
+    expect(s.available[`cc:${cc}`]).toBe(2000);
   });
 });
 

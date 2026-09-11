@@ -128,6 +128,21 @@ describe("SettingsPage", () => {
     await waitFor(() => expect(h.refreshBoot).toHaveBeenCalled());
   });
 
+  it("通用设置包含信用卡还款分组开关：默认关，保存时随表单提交", async () => {
+    h.saveSettings.mockResolvedValue({ ok: true });
+    render(<SettingsPage />);
+    const toggle = (await screen.findByLabelText("settings_showCcPayments")) as HTMLInputElement;
+    expect(toggle.checked).toBe(false);
+
+    fireEvent.click(screen.getByRole("button", { name: "common_save" }));
+    await waitFor(() => expect(h.saveSettings).toHaveBeenCalledWith(expect.objectContaining({ showCcPayments: false })));
+
+    fireEvent.click(toggle);
+    expect(toggle.checked).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "common_save" }));
+    await waitFor(() => expect(h.saveSettings).toHaveBeenLastCalledWith(expect.objectContaining({ showCcPayments: true })));
+  });
+
   it("保存额外提示词：编辑后随 AI 配置一起提交", async () => {
     h.saveSettings.mockResolvedValue({ ok: true });
     render(<SettingsPage />);
