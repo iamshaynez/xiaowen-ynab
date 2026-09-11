@@ -49,6 +49,7 @@ export const api = {
     aiKey?: string;
     aiExtraPrompt?: string;
     aiRequireConfirmation?: boolean;
+    showCcPayments?: boolean;
     backupEnabled?: boolean;
     backupCronTime?: string;
     backupR2Endpoint?: string;

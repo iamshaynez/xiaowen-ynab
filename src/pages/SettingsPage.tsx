@@ -43,6 +43,7 @@ export function SettingsPage() {
   /* ------------------------- 通用 ------------------------- */
   const [symbol, setSymbol] = useState(boot?.settings.currencySymbol ?? "¥");
   const [timezone, setTimezone] = useState(boot?.settings.timezone ?? "UTC");
+  const [showCcPayments, setShowCcPayments] = useState(boot?.settings.showCcPayments ?? false);
 
   // 时区选项：优先使用 Intl 提供的完整 IANA 列表，缺失时回落到常用时区
   const tzOptions = (() => {
@@ -78,7 +79,7 @@ export function SettingsPage() {
 
   const saveGeneral = async () => {
     try {
-      await api.saveSettings({ currencySymbol: symbol, timezone });
+      await api.saveSettings({ currencySymbol: symbol, timezone, showCcPayments });
       await refreshBoot();
       toast(t("settings_savedOk"));
     } catch (e) {
@@ -260,6 +261,19 @@ export function SettingsPage() {
             </select>
             <p className="mt-1 text-[11px] leading-relaxed text-slate-400">{t("settings_timezoneHint")}</p>
           </div>
+          <label className="flex max-w-[320px] cursor-pointer items-start gap-2 pb-1">
+            <input
+              aria-label={t("settings_showCcPayments")}
+              type="checkbox"
+              checked={showCcPayments}
+              onChange={(e) => setShowCcPayments(e.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+            />
+            <span className="min-w-0 flex-1">
+              <span className="block text-xs font-medium text-slate-700">{t("settings_showCcPayments")}</span>
+              <span className="mt-0.5 block text-[11px] leading-relaxed text-slate-400">{t("settings_showCcPaymentsHint")}</span>
+            </span>
+          </label>
           <div className="flex items-end">
             <Btn onClick={saveGeneral}>{t("common_save")}</Btn>
           </div>
