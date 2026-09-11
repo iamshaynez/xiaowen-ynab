@@ -194,6 +194,8 @@ const zh = {
   settings_currencyLabel: "货币符号",
   settings_timezone: "时区",
   settings_timezoneHint: "用于“今天”、报表月份与定时备份的判定；交易日期本身为日历日，按此显示与归档。",
+  settings_showCcPayments: "显示「信用卡还款」分组",
+  settings_showCcPaymentsHint: "在预算页展示每张信用卡的还款科目。关闭时分组隐藏，还款储备仍自动计算，不影响预算结果。",
   settings_savedOk: "已保存",
   settings_aiSection: "AI / LLM 配置",
   settings_aiDesc:
@@ -453,6 +455,8 @@ const en: typeof zh = {
   settings_currencyLabel: "Currency symbol",
   settings_timezone: "Timezone",
   settings_timezoneHint: "Used for “today”, report months and scheduled backups. Transaction dates are calendar days grouped by this zone.",
+  settings_showCcPayments: "Show “Credit Card Payments” group",
+  settings_showCcPaymentsHint: "Lists each credit card’s payment category on the Budget page. When off, the group stays hidden while payment reserves keep working in the background.",
   settings_savedOk: "Saved",
   settings_aiSection: "AI / LLM Configuration",
   settings_aiDesc:

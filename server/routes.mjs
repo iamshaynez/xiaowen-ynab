@@ -102,6 +102,7 @@ api.get("/bootstrap", (req, res) => {
       aiKey: getSetting("ai_key", ""),
       aiExtraPrompt: getSetting("ai_extra_prompt", ""),
       aiRequireConfirmation: getSetting("ai_require_confirmation", "1") !== "0",
+      showCcPayments: getSetting("show_cc_payments", "0") === "1",
       ...readBackupSettings(),
     },
     accounts: accountsWithBalances(),
@@ -126,6 +127,7 @@ api.get("/settings", (req, res) => {
     aiKey: getSetting("ai_key", ""),
     aiExtraPrompt: getSetting("ai_extra_prompt", ""),
     aiRequireConfirmation: getSetting("ai_require_confirmation", "1") !== "0",
+    showCcPayments: getSetting("show_cc_payments", "0") === "1",
     ...readBackupSettings(),
   });
 });
@@ -140,6 +142,7 @@ api.put("/settings", (req, res) => {
     aiKey,
     aiExtraPrompt,
     aiRequireConfirmation,
+    showCcPayments,
     backupEnabled,
     backupCronTime,
     backupR2Endpoint,
@@ -175,6 +178,7 @@ api.put("/settings", (req, res) => {
     setSetting("ai_extra_prompt", aiExtraPrompt.trim());
   }
   if (typeof aiRequireConfirmation === "boolean") setSetting("ai_require_confirmation", aiRequireConfirmation ? "1" : "0");
+  if (typeof showCcPayments === "boolean") setSetting("show_cc_payments", showCcPayments ? "1" : "0");
 
   if (typeof backupEnabled === "boolean") setSetting("backup_enabled", backupEnabled ? "1" : "0");
   if (cronNormalized !== undefined) setSetting("backup_cron_time", cronNormalized);
@@ -499,7 +503,7 @@ function budgetPayload(month) {
   const ccAccounts = db
     .prepare("SELECT id,name,type FROM accounts WHERE type IN ('creditCard','lineOfCredit') AND on_budget=1 AND closed=0 ORDER BY sort_order")
     .all();
-  if (ccAccounts.length) {
+  if (ccAccounts.length && getSetting("show_cc_payments", "0") === "1") {
     groups.push({
       id: "__cc__",
       name: "__cc__",

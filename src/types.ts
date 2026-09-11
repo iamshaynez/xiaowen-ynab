@@ -11,6 +11,8 @@ export interface Settings {
   aiExtraPrompt: string;
   /** 智能助手写操作是否需要二次确认（关闭则直接执行） */
   aiRequireConfirmation: boolean;
+  /** 是否在预算页显示「信用卡还款」虚拟分组（默认隐藏，不影响储备计算） */
+  showCcPayments: boolean;
   /** 备份：每日定时 + Cloudflare R2 (S3 兼容) 远端 */
   backupEnabled: boolean;
   backupCronTime: string;
