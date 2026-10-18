@@ -1,0 +1,40 @@
+# 合并 main 即发布:构建 money 镜像推 ACR,并部署到香港测试机。
+# 构建机 hk-build 与部署目标同机,部署即 docker compose pull && up -d,无需 SSH 凭证。
+# 服务器侧 compose(/opt/apps/money/docker-compose.yml)image 固定 :main 漂浮标签。
+name: deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build-deploy:
+    runs-on: [self-hosted, hk-build]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ secrets.ACR_REGISTRY }}
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ secrets.ACR_REGISTRY }}/girlboss/money:${{ github.sha }}
+            ${{ secrets.ACR_REGISTRY }}/girlboss/money:main
+
+      - name: 部署到测试机(本机)
+        run: |
+          cd /opt/apps/money
+          docker compose pull
+          docker compose up -d
+
+      - name: 冒烟验证
+        run: |
+          sleep 3
+          curl -sf -o /dev/null http://127.0.0.1:18081/
+          echo "money 部署完成,容器 $(docker inspect money --format '{{.Image}}' | cut -c8-19)"
