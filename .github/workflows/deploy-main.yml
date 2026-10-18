@@ -40,11 +40,7 @@ jobs:
 
       - name: 冒烟验证(轮询)
         run: |
-          for i in 1
-2
-3
-4
-5; do
+          for i in $(seq 5); do
             C=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18081/ || true)
             case "$C" in 200|302|401) echo "money 就绪($C,第 $i 轮)"; exit 0;; esac
             sleep 3
