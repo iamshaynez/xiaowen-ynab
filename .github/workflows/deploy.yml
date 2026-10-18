@@ -1,6 +1,8 @@
 # 合并 main 即发布:构建 money 镜像推 ACR,并部署到香港测试机。
 # 构建机 hk-build 与部署目标同机,部署即 docker compose pull && up -d,无需 SSH 凭证。
-# 服务器侧 compose(/opt/apps/money/docker-compose.yml)image 固定 :main 漂浮标签。
+# 凭证说明:登录用 shell docker login 而非 login-action——后者的 post 步骤会 logout,
+# 本机多个 runner 实例共用 runner 用户(HOME 相同),并发 job 会互相清掉对方凭据。
+# pull 带三次重试:香港→阿里云 ACR 偶发跨境链路瞬断(connection reset)。
 name: deploy
 
 on:
@@ -13,11 +15,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: docker/login-action@v3
-        with:
-          registry: ${{ secrets.ACR_REGISTRY }}
-          username: ${{ secrets.ACR_USERNAME }}
-          password: ${{ secrets.ACR_PASSWORD }}
+      - name: 登录 ACR
+        run: echo "${{ secrets.ACR_PASSWORD }}" | docker login "${{ secrets.ACR_REGISTRY }}" -u "${{ secrets.ACR_USERNAME }}" --password-stdin
 
       - uses: docker/build-push-action@v6
         with:
@@ -30,7 +29,7 @@ jobs:
       - name: 部署到测试机(本机)
         run: |
           cd /opt/apps/money
-          docker compose pull
+          for i in 1 2 3; do docker compose pull && break; echo "pull 失败,第 $i 次重试"; sleep 8; done
           docker compose up -d
 
       - name: 冒烟验证
