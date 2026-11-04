@@ -560,7 +560,16 @@ api.put("/budget/:month/category/:categoryId/assign", (req, res) => {
   const { month, categoryId } = req.params;
   if (isIncomeCategory(categoryId)) return bad(res, "cannot assign to income category");
   const cents = Math.round(Number(req.body?.assigned));
-  if (!Number.isFinite(cents) || cents < 0) return bad(res, "invalid amount");
+  if (!Number.isFinite(cents)) return bad(res, "invalid amount");
+  // 负数分配 = 把钱移出分类（典型场景：退款流入抬高当月可用后把余额退回待分配）。
+  // 允许，但不允许把当月可用金额拉成负数。信用卡还款科目在虚拟分组隐藏时
+  // 不出现在 payload 里，此时保持原有不设下限的行为。
+  if (cents < 0) {
+    const cat = budgetPayload(month)?.groups.flatMap((g) => g.categories).find((c) => c.id === categoryId);
+    if (cat && cat.available - cat.assigned + cents < 0) {
+      return bad(res, "negative assignment would overdraw this category");
+    }
+  }
   upsertAssignment(month, categoryId, cents);
   res.json(budgetPayload(month));
 });
@@ -588,8 +597,12 @@ api.post("/budget/:month/move", (req, res) => {
   if (!fromId || !toId || fromId === toId) return bad(res, "select different categories");
   if (!Number.isFinite(cents) || cents <= 0) return bad(res, "invalid amount");
   try {
+    // 移出金额不得超过来源分类当月可用，避免把可用拉成负数
+    const src = budgetPayload(month)?.groups.flatMap((g) => g.categories).find((c) => c.id === fromId);
+    if (src && cents > Math.max(src.available, 0)) return bad(res, "source category has insufficient available funds");
     adjustAssignment(month, fromId, -cents);
-    adjustAssignment(month, toId, cents);
+    // toId=rta：只从来源扣减，金额退回 Ready to Assign（不再有目标分类）
+    if (toId !== "rta") adjustAssignment(month, toId, cents);
   } catch (e) {
     return bad(res, e.message);
   }

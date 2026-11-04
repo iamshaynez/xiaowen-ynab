@@ -6,7 +6,7 @@ import path from "node:path";
 
 process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "ynab-ai-hist-test-"));
 
-const { db } = await import("./db.mjs");
+const { db, todayYmd } = await import("./db.mjs");
 const { createSession, buildLlmMessages, splitToolPlans, buildSystemPrompt } = await import("./ai.mjs");
 
 let seq = 0;
@@ -232,5 +232,58 @@ describe("splitToolPlans：写调用不得进入已执行可见列表", () => {
 describe("buildSystemPrompt：写操作约束", () => {
   it("系统提示词明确限制单次最多发起 1 个写操作", () => {
     expect(buildSystemPrompt()).toContain("最多发起 1 个写操作");
+  });
+});
+
+describe("buildLlmMessages：瞬态日期注入", () => {
+  // 生产事故：跨天续用同一会话时，历史里残留着昨天记账的日期字面量（旧 SQL、
+  // 助手确认话术），模型跟着历史走而把“今天”记成昨天。系统提示词开头的日期
+  // 距离生成位置太远压不住历史污染，必须把新鲜日期注入到最后一条 user 消息上。
+  it("最后一条 user 消息被追加今天的日期后缀，更早的 user 消息不受影响", () => {
+    const s = createSession("d1");
+    seedMsg(s.id, { role: "user", content: "昨天晚上记账" });
+    seedMsg(s.id, {
+      role: "assistant",
+      content: "",
+      toolCalls: [tc("c-old")],
+      pendingSql: "INSERT INTO transactions(id,account_id,date,amount) VALUES('a','b','2026-11-02',-3000)",
+      resolved: 1,
+    });
+    seedMsg(s.id, { role: "tool", toolCallId: "c-old", content: '{"ok":true,"changes":1}' });
+    seedMsg(s.id, { role: "assistant", content: "已记录 11 月 2 日的消费。" });
+    seedMsg(s.id, { role: "user", content: "今天中午消费30元" });
+
+    const out = buildLlmMessages(s.id);
+    expect(() => assertValidToolSequence(out)).not.toThrow();
+    const users = out.filter((m) => m.role === "user");
+    expect(users).toHaveLength(2);
+    expect(users[0].content).not.toContain("[系统注入]");
+    expect(users[1].content).toContain("今天中午消费30元");
+    expect(users[1].content).toContain("[系统注入]");
+    expect(users[1].content).toContain(todayYmd());
+  });
+
+  it("注入是瞬态的：不写回数据库，重复构建不叠加", () => {
+    const s = createSession("d2");
+    seedMsg(s.id, { role: "user", content: "hi" });
+    buildLlmMessages(s.id);
+    buildLlmMessages(s.id);
+    const row = db.prepare("SELECT content FROM chat_messages WHERE session_id=?").get(s.id);
+    expect(row.content).toBe("hi");
+    const out = buildLlmMessages(s.id);
+    expect(String(out.at(-1).content).match(/\[系统注入\]/g)).toHaveLength(1);
+  });
+
+  it("纯图片消息：注入附加在合成文字部分，不破坏多模态结构", () => {
+    const s = createSession("d3");
+    seedMsg(s.id, { role: "user", content: "" });
+    const out = buildLlmMessages(s.id, { images: ["data:image/png;base64,AAAA"] });
+    const last = out.at(-1);
+    expect(last.role).toBe("user");
+    expect(Array.isArray(last.content)).toBe(true);
+    expect(last.content[0].type).toBe("text");
+    expect(last.content[0].text).toContain("[系统注入]");
+    expect(last.content[0].text).toContain(todayYmd());
+    expect(last.content.some((p) => p.type === "image_url")).toBe(true);
   });
 });

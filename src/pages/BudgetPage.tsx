@@ -123,8 +123,13 @@ export function BudgetPage() {
   const commitAssign = async (month: string, catId: string, value: string) => {
     setEditing(null);
     const cents = parseAmountToCents(value);
-    if (cents == null || cents < 0) return;
-    apply(await api.assign(month, catId, cents));
+    // 负数 = 把钱移出分类（如退款流入后退回待分配），下限校验由服务端兜底
+    if (cents == null) return;
+    try {
+      apply(await api.assign(month, catId, cents));
+    } catch (e) {
+      toast(e instanceof Error && e.message ? e.message : t("common_error"), "err");
+    }
   };
 
   const copyPrev = async (m: string) => {
@@ -841,8 +846,12 @@ function Inspector({
   }, [onClose]);
   const assign = async (cents: number) => {
     if (!cat) return;
-    onApply(await api.assign(data.month, cat.id, cents));
-    toast(fmtMoney(cents) + " ✓");
+    try {
+      onApply(await api.assign(data.month, cat.id, cents));
+      toast(fmtMoney(cents) + " ✓");
+    } catch (e) {
+      toast(e instanceof Error && e.message ? e.message : t("common_error"), "err");
+    }
   };
 
   const goalForm = useMemo(() => {
@@ -949,13 +958,19 @@ function Inspector({
 
                 <div className="mt-5">
                   <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">{t("inspector_quickAssign")}</div>
-                  <div className="space-y-1.5">
+                      <div className="space-y-1.5">
                     {cat.need != null && cat.need.need > 0 && (
                       <QuickBtn label={t("inspector_needTarget", { amt: fmtMoney(cat.need.need) })} onClick={() => assign(cat.need!.need)} />
                     )}
                     <QuickBtn label={t("inspector_lastMonth", { amt: fmtMoney(cat.lastAssigned) })} onClick={() => assign(cat.lastAssigned)} />
                     {cat.avgSpend > 0 && (
                       <QuickBtn label={t("inspector_avgSpend", { amt: fmtMoney(cat.avgSpend) })} onClick={() => assign(cat.avgSpend)} />
+                    )}
+                    {cat.available > cat.assigned && (
+                      <QuickBtn
+                        label={t("inspector_moveOut", { amt: fmtMoney(cat.available - cat.assigned) })}
+                        onClick={() => assign(cat.assigned - cat.available)}
+                      />
                     )}
                     <div className="flex gap-1.5 pt-1">
                       <input
@@ -966,7 +981,7 @@ function Inspector({
                         onKeyDown={(e) => {
                           if (e.key === "Enter") {
                             const cents = parseAmountToCents(custom);
-                            if (cents != null && cents >= 0) assign(cents).then(() => setCustom(""));
+                            if (cents != null) assign(cents).then(() => setCustom(""));
                           }
                         }}
                       />
@@ -974,7 +989,7 @@ function Inspector({
                         variant="primary"
                         onClick={() => {
                           const cents = parseAmountToCents(custom);
-                          if (cents != null && cents >= 0) assign(cents).then(() => setCustom(""));
+                          if (cents != null) assign(cents).then(() => setCustom(""));
                         }}
                       >
                         ✓
@@ -1197,6 +1212,8 @@ function MoveMoneyModal({ data, onClose, onDone }: { data: BudgetData; onClose: 
         <select className={inputCls} value={to} onChange={(e) => setTo(e.target.value)}>
           <option value="">—</option>
           {opts}
+          {/* rta 目标：金额退回 Ready to Assign（典型：退款流入后把余额移出分类） */}
+          <option value="rta">{t("move_rta")}</option>
         </select>
       </Field>
       <Field label={t("move_amount")}>
