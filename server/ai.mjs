@@ -453,6 +453,14 @@ function addMessage(sessionId, fields) {
 // 历史数据可能存在悬空调用（旧版 bug、用户未确认就继续提问等），这里统一补齐/清洗。
 const NO_RESULT_TOOL = JSON.stringify({ ok: false, error: "no result was recorded for this tool call" });
 
+// 瞬态日期注入：跨天续用同一会话时，历史里残留着昨天记账的日期字面量（旧 SQL、
+// 助手确认话术），模型容易跟着历史走而把“今天”记成昨天；系统提示词开头的日期
+// 距离生成位置太远压不住这种污染。因此每次请求把新鲜日期附加到发给 LLM 的
+// 最后一条 user 消息上（模型注意力最强的位置），仅在出站消息中生效、绝不落库。
+function ephemeralDateStamp() {
+  return `\n\n[系统注入] 今天=${todayYmd()}（时区 ${getTimezone()}，服务器实时计算）。用户未明确指定日期时，写入 transactions.date 必须使用上面的今天日期，禁止沿用对话历史中出现的旧日期。`;
+}
+
 export function buildLlmMessages(sessionId, opts = {}) {
   const rows = db
     .prepare("SELECT * FROM chat_messages WHERE session_id=? ORDER BY created_at, rowid")
@@ -471,7 +479,7 @@ export function buildLlmMessages(sessionId, opts = {}) {
     }
   };
 
-  // 找到最近一条 user 消息的索引，用于挂载瞬态图片（仅当次生效，不落库）
+  // 找到最近一条 user 消息的索引，用于挂载瞬态图片与日期注入（仅当次生效，不落库）
   let lastUserIndex = -1;
   for (let i = recent.length - 1; i >= 0; i--) {
     if (recent[i].role === "user") {
@@ -486,17 +494,18 @@ export function buildLlmMessages(sessionId, opts = {}) {
       flushAwaiting();
       const isLastUser = idx === lastUserIndex;
       const images = isLastUser && ephemeralImages.length ? ephemeralImages : null;
+      const stamp = isLastUser ? ephemeralDateStamp() : "";
       if (Array.isArray(images) && images.length) {
         const parts = [];
         const text = (m.content || "").trim();
-        if (text) parts.push({ type: "text", text });
-        else parts.push({ type: "text", text: "请识别这张图片中的消费/账单信息并按需记账。" });
+        if (text) parts.push({ type: "text", text: text + stamp });
+        else parts.push({ type: "text", text: "请识别这张图片中的消费/账单信息并按需记账。" + stamp });
         for (const url of images) {
           parts.push({ type: "image_url", image_url: { url, detail: "auto" } });
         }
         out.push({ role: "user", content: parts });
       } else {
-        out.push({ role: "user", content: m.content || "" });
+        out.push({ role: "user", content: (m.content || "") + stamp });
       }
     } else if (m.role === "assistant") {
       // 未决的待确认写操作整体跳过：该写操作尚未被执行也未被拒绝，
