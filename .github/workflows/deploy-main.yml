@@ -1,5 +1,5 @@
 # 合并 main 即发布:构建 money 镜像推 ACR,并部署到香港测试机。
-# 构建机 hk-build 与部署目标同机,部署即 docker compose pull && up -d,无需 SSH 凭证。
+# GitHub 托管 runner(public 仓库免费)构建推 ACR,再经 SSH 受限密钥部署到 hk-dev 测试机(2026-11-06 迁移,与 gb-pmo 同模式)。
 # ① 登录用 shell docker login 而非 login-action:后者的 post 步骤会 logout,本机多 runner
 #    实例共用 runner 用户(HOME 相同),并发 job 会互清对方凭据(实测)。
 # ② 登录与 pull 均带重试:香港→阿里云 ACR(heyuan)auth 端点偶发跨境瞬断(connection reset)。
@@ -13,7 +13,7 @@ on:
 
 jobs:
   build-deploy:
-    runs-on: [self-hosted, hk-build]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -28,21 +28,19 @@ jobs:
         with:
           context: .
           push: true
+          # 个人版 ACR 不收 buildx attestation(vnd.oci.empty)——hosted runner 新 buildx 必触发,必须关
+          provenance: false
           tags: |
             ${{ secrets.ACR_REGISTRY }}/xiaowenz/money:${{ github.sha }}
             ${{ secrets.ACR_REGISTRY }}/xiaowenz/money:main
 
-      - name: 部署到测试机(本机)
+      - name: SSH 受限部署到测试机(hk-dev)
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_HOSTKEY: ${{ secrets.DEPLOY_HOSTKEY }}
         run: |
-          cd /opt/apps/money
-          for i in 1 2 3; do docker compose pull && break; echo "pull 失败,第 $i 次重试"; sleep 8; done
-          docker compose up -d
-
-      - name: 冒烟验证(轮询)
-        run: |
-          for i in $(seq 5); do
-            C=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18081/ || true)
-            case "$C" in 200|302|401) echo "money 就绪($C,第 $i 轮)"; exit 0;; esac
-            sleep 3
-          done
-          echo "money 未就绪"; docker logs money --tail 20; exit 1
+          mkdir -p ~/.ssh
+          printf '%s\n' "$DEPLOY_HOSTKEY" > ~/.ssh/known_hosts
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key ~/.ssh/known_hosts
+          ssh -i ~/.ssh/deploy_key -o UserKnownHostsFile=~/.ssh/known_hosts -o StrictHostKeyChecking=yes deploy@207.57.130.82
