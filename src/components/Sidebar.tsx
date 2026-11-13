@@ -2,6 +2,7 @@ import {
   Banknote,
   Car,
   CreditCard,
+  Github,
   Home,
   Landmark,
   ListChecks,
@@ -238,6 +239,15 @@ export function Sidebar({
             {(boot?.settings.currencySymbol ?? "¥")}
           </button>
         </div>
+        <a
+          href="https://github.com/iamshaynez/xiaowen-ynab"
+          target="_blank"
+          rel="noreferrer"
+          className="flex items-center gap-1.5 text-[11px] text-slate-500 transition-colors hover:text-slate-300"
+        >
+          <Github size={12} />
+          <span className="truncate">iamshaynez/xiaowen-ynab</span>
+        </a>
       </div>
     </aside>
   );
