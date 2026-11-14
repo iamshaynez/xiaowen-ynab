@@ -1,11 +1,233 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-<meta name="description" content="小文预算——本地优先的信封记账法应用:结合 AI 助手,一句话记账;微信、飞书随时随地说一声就好;数据永远在你自己手里。" />
-<title>小文预算 Xiaowen Budget · 信封记账法 × AI 记账</title>
+<meta name="description" content="Xiaowen Budget — a local-first envelope budgeting app with a built-in AI assistant. Log a transaction in one chat message on WeChat or Feishu, anytime. Your data stays on your machine." />
+<title>Xiaowen Budget · Envelope Budgeting, Meet AI</title>
+<script>
+  // 双语字典:HTML 基准语言为英文(默认),zh 在页面底部统一替换。
+  // 语言选择存 localStorage("landing_lang"),与应用内 lang 设置相互独立(默认值不同)。
+  window.LANG_DICT = {
+    en: {
+      __title: "Xiaowen Budget · Envelope Budgeting, Meet AI",
+      __desc: "Xiaowen Budget — a local-first envelope budgeting app with a built-in AI assistant. Log a transaction in one chat message on WeChat or Feishu, anytime. Your data stays on your machine.",
+      brand: "Xiaowen Budget",
+      nav_features: "Features",
+      nav_ai: "AI Bookkeeping",
+      nav_any: "Anywhere",
+      nav_method: "Method",
+      nav_start: "Get Started",
+      nav_cta: "Get Started",
+      eyebrow: "ENVELOPE BUDGETING · LOCAL-FIRST",
+      h1: "Give every dollar,<br /><span class=\"grad\">a job.</span>",
+      sub: "A money tool that runs entirely on <strong>your own machine</strong> — envelope-budgeting best practices plus an <strong>AI assistant</strong> that logs transactions from a single chat message. <strong>WeChat &amp; Feishu</strong>, anytime, anywhere — and your data stays yours.",
+      cta_source: "View Source",
+      cta_start: "Quick Start",
+      fc1: "AI entry confirmed · Lunch ¥35",
+      fc2: "Credit card · budget auto-deducted",
+      mk_logo: "Xiaowen Budget",
+      mk_nav_budget: "Budget",
+      mk_nav_accounts: "Accounts",
+      mk_nav_reports: "Reports",
+      mk_nav_ai: "AI Assistant",
+      mk_sec_on: "On Budget",
+      mk_sec_cc: "Credit Cards",
+      mk_acc_bank: "Merchants Bank",
+      mk_acc_alipay: "Alipay",
+      mk_acc_card: "CMB Credit Card",
+      mk_month: "November 2026",
+      mk_pill: "Ready to Assign ¥0.00",
+      mk_chip: "Age of Money · 32 days",
+      mk_th_cat: "Category",
+      mk_th_assign: "Assigned",
+      mk_th_act: "Activity",
+      mk_th_avail: "Available",
+      mk_cat1: "Dining",
+      mk_cat2: "Rent",
+      mk_cat3: "Savings · Japan",
+      mk_cat4: "Subscriptions",
+      stat1b: "Envelopes",
+      stat1s: "A proven method — assign first, spend later",
+      stat2b: "AI bookkeeping",
+      stat2s: "Say it once — recorded &amp; categorized",
+      stat3b: "WeChat · Feishu",
+      stat3s: "Log it right in your chat",
+      stat4b: "Data ownership",
+      stat4s: "No cloud, no subscription — ever",
+      feat_h2: "Money tracking, done right",
+      feat_sub: "From entry to review, budget to reports — every detail built to last.",
+      f1h: "Envelope assigning",
+      f1p: "Assign income into envelopes first, then <b>check what's left before you spend</b> — no more month-end surprises.",
+      f2h: "One-line logging",
+      f2p: "“Log lunch, ¥35.” “Dining this month?” — <b>just tell the AI</b>; it records, categorizes and totals for you.",
+      f3h: "WeChat · Feishu ready",
+      f3p: "No app to open — log, budget and read reports right in your chat. <b>One message, wherever you are.</b>",
+      f4h: "Reports at a glance",
+      f4p: "Net worth, trends, spending mix, top payees — <b>see where the money goes</b>, and feel the ground under you.",
+      f5h: "Painless reconciliation",
+      f5p: "Bulk categorize, quick clear, statement reconcile; refunds return to the <b>original category</b> — never as income.",
+      f6h: "Daily auto-backup",
+      f6p: "Your ledger backs up on schedule, kept locally and in the cloud — <b>safe from device swaps and slips of the hand</b>.",
+      ai_kicker: "AI AGENT · BUILT RIGHT IN",
+      ai_h2: "Logging as easy as sending a message",
+      ai_p1: "“Log lunch, ¥35, Alipay.” “What did dining cost this month?” — just send it to the AI. It books every entry, fills every envelope, and answers in a single line.",
+      ai_p2: "<b>Hand it over with confidence</b>: the AI always asks before touching your ledger — one tap to confirm.",
+      chat_title: "AI Assistant · Xiaowen Budget",
+      chat_user: "Log lunch ¥35, Alipay, dining category",
+      chat_ai: "Sure — here's the expense I've prepared:",
+      chat_entry_cat: "Dining",
+      chat_entry_meta: "Alipay · Nov 14",
+      confirm_t: "AI wants to write to your ledger",
+      confirm_p: "It only counts once you confirm — Cancel backs out anytime.",
+      confirm_cancel: "Cancel",
+      confirm_ok: "Confirm entry",
+      any_h2: "Out and about? One message away.",
+      any_p1: "No computer, no dedicated app. Just message the bot in WeChat or Feishu: log an expense, check a balance, see what's left — <b>done in seconds</b>.",
+      any_p2: "The easier it is to log, the longer you last. <b>Frictionless entry is what makes it stick</b> — so Xiaowen Budget lives in the chat window you already use.",
+      phone_title: "Xiaowen Budget",
+      phone_status: "Online",
+      ph_u1: "lunch 35 alipay",
+      ph_a1: "Done: Dining -¥35.00, ¥343.60 left in this month's envelope 🍚",
+      ph_u2: "How much on dining this month?",
+      ph_a2: "¥856.40 — 71% of the dining budget. Nicely on pace, keep going 💪",
+      m_h2: "Envelope budgeting, done right",
+      m_sub: "Assign before you spend. Turn the budget into visible envelopes — not month-end regret.",
+      r1h: "Give every dollar a job",
+      r1p: "Assign income as it arrives until every dollar has a home. Spend with clarity, not guilt.",
+      r2h: "Embrace true expenses",
+      r2p: "Rent, insurance, travel — save monthly for the big stuff, and bills lose their sting.",
+      r3h: "Roll with it",
+      r3p: "Plans change? Move money between envelopes. The budget follows your life — not the other way around.",
+      r4h: "Watch your age of money",
+      r4p: "The longer your money sits, the calmer your finances — age of money is your breathing-room metric.",
+      s_h2: "Up and running in two minutes",
+      s_sub: "Free and open source. Your data never leaves your machine — a laptop is all it takes.",
+      t1_title: "From source",
+      t1_c1: "# Clone &amp; install",
+      t1_c2: "# Start it, then open your browser to begin",
+      t2_title: "Docker",
+      t2_c1: "# One command — data stays on your machine",
+      t2_c2: "# Your ledger backs up daily",
+      t2_c3: "# You just record; it handles the rest",
+      fin_h2: "Get your money in order, <span class=\"grad\">starting today.</span>",
+      fin_p: "Open source, no sign-up, no subscription. Clone it and it's yours.",
+      foot_open: "Open App",
+      foot_note: "A single static file — <b>no third-party scripts, no tracking</b> — true to the app's local-first spirit. © <span id=\"yr\">2026</span> iamshaynez"
+    },
+    zh: {
+      __title: "小文预算 Xiaowen Budget · 信封记账法 × AI 记账",
+      __desc: "小文预算——本地优先的信封记账法应用:结合 AI 助手,一句话记账;微信、飞书随时随地说一声就好;数据永远在你自己手里。",
+      brand: "小文预算",
+      nav_features: "特性",
+      nav_ai: "AI 记账",
+      nav_any: "随时随地",
+      nav_method: "方法",
+      nav_start: "快速开始",
+      nav_cta: "开始使用",
+      eyebrow: "ENVELOPE BUDGETING · 信封记账法",
+      h1: "给每一块钱,<br /><span class=\"grad\">一个任务。</span>",
+      sub: "完全跑在<strong>你自己电脑上</strong>的记账工具——遵循<strong>信封记账法</strong>最佳实践,结合 AI 助手,发条消息就能记账。<strong>微信、飞书</strong>,随时随地;数据永远在你手里。",
+      cta_source: "查看源码",
+      cta_start: "快速开始",
+      fc1: "AI 已确认写入 · 午饭 ¥35",
+      fc2: "刷信用卡 · 预算额度自动扣减",
+      mk_logo: "小文预算",
+      mk_nav_budget: "预算",
+      mk_nav_accounts: "账户",
+      mk_nav_reports: "报表",
+      mk_nav_ai: "AI 助手",
+      mk_sec_on: "预算内账户",
+      mk_sec_cc: "信用卡",
+      mk_acc_bank: "招商银行",
+      mk_acc_alipay: "支付宝",
+      mk_acc_card: "招行信用卡",
+      mk_month: "2026 年 11 月",
+      mk_pill: "待分配 ¥0.00",
+      mk_chip: "资金账龄 32 天",
+      mk_th_cat: "分类",
+      mk_th_assign: "已分配",
+      mk_th_act: "活动",
+      mk_th_avail: "剩余",
+      mk_cat1: "餐饮美食",
+      mk_cat2: "住房房租",
+      mk_cat3: "储蓄 · 日本旅行",
+      mk_cat4: "订阅服务",
+      stat1b: "信封记账",
+      stat1s: "成熟方法论最佳实践,先分钱再花钱",
+      stat2b: "AI 记账",
+      stat2s: "一句话说清,自动记好分好类",
+      stat3b: "微信 · 飞书",
+      stat3s: "聊天窗口里记,随时随地",
+      stat4b: "数据自有",
+      stat4s: "不上云、不订阅,永远在你手里",
+      feat_h2: "把记账这件事,做完整",
+      feat_sub: "从录入到复盘,从预算到报表——每一个环节都为「长期坚持」而设计。",
+      f1h: "信封分配",
+      f1p: "收入进账,先把钱分进一个个「信封」;<b>花之前先看信封里还剩多少</b>,不再月底对着账单惊讶。",
+      f2h: "一句话记账",
+      f2p: "「记一笔午饭 35 元」「这个月餐饮花了多少」——<b>跟 AI 说一声就行</b>,帮你记好、分好、算好。",
+      f3h: "微信 · 飞书随时记",
+      f3p: "不用专门打开 App,在聊天软件里记账、查预算、看报表——<b>出门在外,一条消息的事</b>。",
+      f4h: "报表一目了然",
+      f4p: "净资产走势、收支趋势、花钱构成、常去的商家——<b>一眼看清钱去哪儿了</b>,心里更有底。",
+      f5h: "对账省心",
+      f5p: "批量分类、快速清算、银行流水对账;退款<b>自动记回原来的支出</b>,不会算成收入。",
+      f6h: "每天自动备份",
+      f6p: "账本每天定点自动备份,本地与云端各留版本——<b>换设备、误操作,都不怕丢</b>。",
+      ai_kicker: "AI AGENT · 记账搭子",
+      ai_h2: "记账,像发消息一样自然",
+      ai_p1: "「记一笔午饭 35 元,支付宝」「这个月餐饮花了多少」——发给 AI 就好。它帮你记好每一笔、分好每个信封,查账复盘也是一句话的事。",
+      ai_p2: "<b>放心交出去</b>:AI 动你的账本之前一定先问你,点一下确认才算数。",
+      chat_title: "AI 助手 · 小文预算",
+      chat_user: "记一笔午饭 35 元,支付宝,餐饮分类",
+      chat_ai: "好的,帮你整理成一笔支出:",
+      chat_entry_cat: "餐饮美食",
+      chat_entry_meta: "支付宝 · 11 月 14 日",
+      confirm_t: "AI 想帮你写进账本",
+      confirm_p: "确认后这笔才真正记上;反悔点「取消」就行。",
+      confirm_cancel: "取消",
+      confirm_ok: "确认记上",
+      any_h2: "出门在外,一条消息的事",
+      any_p1: "不用打开电脑,也不用专门开 App。微信、飞书里直接发消息:记一笔、查余额、看看这个月还剩多少——<b>几秒钟,顺手就记了</b>。",
+      any_p2: "账记得越顺手,坚持得越久。<b>「随手能记」是记账能不能坚持下来的关键</b>——小文预算把入口搬到了你最常用的聊天窗口里。",
+      phone_title: "小文预算",
+      phone_status: "在线",
+      ph_u1: "午饭 35 支付宝",
+      ph_a1: "已记好:餐饮 -¥35.00,本月餐饮信封还剩 ¥343.60 🍚",
+      ph_u2: "这个月餐饮花了多少?",
+      ph_a2: "¥856.40,预算用了 71%。节奏很稳,继续加油 💪",
+      m_h2: "信封记账法,这样做才有效",
+      m_sub: "先分钱,再花钱。把预算变成看得见的信封,而不是月底账单后的懊悔。",
+      r1h: "给每一块钱一个任务",
+      r1p: "收入到账先分配,直到每一块都有去处。花钱时心里有数,不再纠结。",
+      r2h: "拥抱真实支出",
+      r2p: "房租、保险、旅行——大额开销提前按月攒进信封,账单来时从容不迫。",
+      r3h: "灵活调整",
+      r3p: "计划赶不上变化?把预算挪个位置就好。预算跟着生活走,不苛责自己。",
+      r4h: "关注资金账龄",
+      r4p: "钱在你手里待得越久,财务越从容——账龄,就是你自己的「松弛感」指标。",
+      s_h2: "两分钟,跑起来",
+      s_sub: "开源免费,数据从头到尾都落在你自己的机器上——一台电脑就够了。",
+      t1_title: "源码运行",
+      t1_c1: "# 克隆并安装",
+      t1_c2: "# 启动,打开浏览器就能开始记账",
+      t2_title: "Docker",
+      t2_c1: "# 一键启动,数据落在自己机器上",
+      t2_c2: "# 每天,账本会自动备份",
+      t2_c3: "# 你只管记账,其他交给它",
+      fin_h2: "钱的事,从<span class=\"grad\">今天这笔</span>开始理清。",
+      fin_p: "开源免费,无需注册,没有订阅。克隆下来,它就是你的。",
+      foot_open: "打开应用",
+      foot_note: "本页面为纯静态单文件,<b>无任何第三方脚本与追踪</b>——与主应用的本地优先原则一致。© <span id=\"yr\">2026</span> iamshaynez"
+    }
+  };
+  window.LANG = (function () {
+    try { return localStorage.getItem("landing_lang") === "zh" ? "zh" : "en"; } catch (e) { return "en"; }
+  })();
+  document.documentElement.lang = window.LANG === "zh" ? "zh-CN" : "en";
+</script>
 <style>
   /* ---------- theme:与主应用 styles.css 同源 ---------- */
   :root {
@@ -102,6 +324,15 @@
     padding: 7px 12px; border-radius: 9px; transition: color 0.15s, background 0.15s;
   }
   .nav-gh:hover { color: var(--ink-1); background: rgba(255, 255, 255, 0.06); }
+  .lang-sw { display: flex; overflow: hidden; border-radius: 999px; border: 1px solid var(--line-2); }
+  .lang-sw button {
+    font-family: var(--font); font-size: 11.5px; font-weight: 600; padding: 6px 11px;
+    background: transparent; border: none; color: var(--ink-3); cursor: pointer;
+    transition: color 0.15s, background 0.15s; line-height: 1.4; white-space: nowrap;
+  }
+  .lang-sw button.active { background: var(--brand-600); color: #fff; }
+  .lang-sw button:not(.active):hover { color: var(--ink-1); }
+  html[lang="en"] .brand .en { display: none; }
   .btn {
     display: inline-flex; align-items: center; gap: 8px;
     border-radius: 12px; font-weight: 600; font-size: 14px;
@@ -458,7 +689,8 @@
     .brand .en { display: none; }
     .nav-inner { gap: 12px; }
     .nav-right { gap: 8px; }
-    .nav-gh svg { display: none; }
+    .nav-gh { display: none; }
+    .lang-sw button { padding: 5px 9px; }
     .hero { padding-top: 118px; }
     .mockup { grid-template-columns: 1fr; }
     .mk-side { display: none; }
@@ -480,22 +712,26 @@
 <nav id="nav">
   <div class="nav-inner">
     <a class="brand" href="#">
-      <img src="/favicon.svg" alt="小文预算 logo" />
-      <span>小文预算 <span class="en">XIAOWEN BUDGET</span></span>
+      <img src="/favicon.svg" alt="Xiaowen Budget logo" />
+      <span><span data-i18n="brand">Xiaowen Budget</span> <span class="en">XIAOWEN BUDGET</span></span>
     </a>
     <div class="nav-links">
-      <a href="#features">特性</a>
-      <a href="#ai">AI 记账</a>
-      <a href="#anywhere">随时随地</a>
-      <a href="#philosophy">方法</a>
-      <a href="#start">快速开始</a>
+      <a href="#features" data-i18n="nav_features">Features</a>
+      <a href="#ai" data-i18n="nav_ai">AI Bookkeeping</a>
+      <a href="#anywhere" data-i18n="nav_any">Anywhere</a>
+      <a href="#philosophy" data-i18n="nav_method">Method</a>
+      <a href="#start" data-i18n="nav_start">Get Started</a>
     </div>
     <div class="nav-right">
+      <div class="lang-sw" role="group" aria-label="Language">
+        <button type="button" data-lang="en" class="active">EN</button>
+        <button type="button" data-lang="zh">中文</button>
+      </div>
       <a class="nav-gh" href="https://github.com/iamshaynez/xiaowen-ynab" target="_blank" rel="noreferrer">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.55 0-.27-.01-1.17-.02-2.12-3.2.7-3.87-1.36-3.87-1.36-.52-1.33-1.28-1.68-1.28-1.68-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.03 1.76 2.69 1.25 3.35.96.1-.75.4-1.25.72-1.54-2.55-.29-5.23-1.28-5.23-5.68 0-1.26.45-2.28 1.18-3.09-.12-.29-.51-1.46.11-3.05 0 0 .96-.31 3.16 1.18a11 11 0 0 1 5.76 0c2.19-1.49 3.15-1.18 3.15-1.18.63 1.59.24 2.76.12 3.05.74.81 1.18 1.83 1.18 3.09 0 4.41-2.69 5.38-5.25 5.67.41.35.78 1.05.78 2.12 0 1.53-.01 2.76-.01 3.14 0 .3.2.66.8.55A11.51 11.51 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5z"/></svg>
         GitHub
       </a>
-      <a class="btn btn-primary btn-sm" href="#start">开始使用</a>
+      <a class="btn btn-primary btn-sm" href="#start" data-i18n="nav_cta">Get Started</a>
     </div>
   </div>
 </nav>
@@ -504,19 +740,18 @@
   <!-- ============ Hero ============ -->
   <header class="hero">
     <div class="wrap">
-      <div class="eyebrow rv">ENVELOPE BUDGETING · 信封记账法</div>
-      <h1 class="rv rv-d1">给每一块钱,<br /><span class="grad">一个任务。</span></h1>
-      <p class="sub rv rv-d2">
-        完全跑在<strong>你自己电脑上</strong>的记账工具——遵循<strong>信封记账法</strong>最佳实践,
-        结合 AI 助手,发条消息就能记账。<strong>微信、飞书</strong>,随时随地;数据永远在你手里。
+      <div class="eyebrow rv" data-i18n="eyebrow">ENVELOPE BUDGETING · LOCAL-FIRST</div>
+      <h1 class="rv rv-d1" data-i18n="h1">Give every dollar,<br /><span class="grad">a job.</span></h1>
+      <p class="sub rv rv-d2" data-i18n="sub">
+        A money tool that runs entirely on <strong>your own machine</strong> — envelope-budgeting best practices plus an <strong>AI assistant</strong> that logs transactions from a single chat message. <strong>WeChat &amp; Feishu</strong>, anytime, anywhere — and your data stays yours.
       </p>
       <div class="hero-cta rv rv-d3">
         <a class="btn btn-primary" href="https://github.com/iamshaynez/xiaowen-ynab" target="_blank" rel="noreferrer">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.55 0-.27-.01-1.17-.02-2.12-3.2.7-3.87-1.36-3.87-1.36-.52-1.33-1.28-1.68-1.28-1.68-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.03 1.76 2.69 1.25 3.35.96.1-.75.4-1.25.72-1.54-2.55-.29-5.23-1.28-5.23-5.68 0-1.26.45-2.28 1.18-3.09-.12-.29-.51-1.46.11-3.05 0 0 .96-.31 3.16 1.18a11 11 0 0 1 5.76 0c2.19-1.49 3.15-1.18 3.15-1.18.63 1.59.24 2.76.12 3.05.74.81 1.18 1.83 1.18 3.09 0 4.41-2.69 5.38-5.25 5.67.41.35.78 1.05.78 2.12 0 1.53-.01 2.76-.01 3.14 0 .3.2.66.8.55A11.51 11.51 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5z"/></svg>
-          查看源码
+          <span data-i18n="cta_source">View Source</span>
         </a>
         <a class="btn btn-ghost" href="#start">
-          快速开始
+          <span data-i18n="cta_start">Quick Start</span>
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>
         </a>
       </div>
@@ -525,56 +760,56 @@
       <div class="mockup-zone rv rv-d4">
         <div class="float-chip fc-1">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
-          AI 已确认写入 · 午饭 ¥35
+          <span data-i18n="fc1">AI entry confirmed · Lunch ¥35</span>
         </div>
         <div class="float-chip fc-2">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>
-          刷信用卡 · 预算额度自动扣减
+          <span data-i18n="fc2">Credit card · budget auto-deducted</span>
         </div>
         <div class="mockup" aria-hidden="true">
           <div class="mk-side">
             <div class="mk-logo">
               <span class="dot"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="13" rx="3"/><path d="M16 12.5h.01"/></svg></span>
-              <span>小文预算</span>
+              <span data-i18n="mk_logo">Xiaowen Budget</span>
             </div>
             <div class="mk-nav">
-              <a class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="13" rx="3"/><path d="M16 12.5h.01"/></svg>预算</a>
-              <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="m3 8 9-5 9 5"/><path d="M5 8v13M19 8v13"/></svg>账户</a>
-              <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 6 5 5 4-3 9 8"/><path d="M3 11v10"/></svg>报表</a>
-              <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/></svg>AI 助手</a>
+              <a class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="13" rx="3"/><path d="M16 12.5h.01"/></svg><span data-i18n="mk_nav_budget">Budget</span></a>
+              <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="m3 8 9-5 9 5"/><path d="M5 8v13M19 8v13"/></svg><span data-i18n="mk_nav_accounts">Accounts</span></a>
+              <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 6 5 5 4-3 9 8"/><path d="M3 11v10"/></svg><span data-i18n="mk_nav_reports">Reports</span></a>
+              <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/></svg><span data-i18n="mk_nav_ai">AI Assistant</span></a>
             </div>
-            <div class="mk-sec">预算内账户</div>
-            <div class="mk-acc"><b>招商银行</b><span class="num">12,480.00</span></div>
-            <div class="mk-acc"><b>支付宝</b><span class="num">3,206.55</span></div>
-            <div class="mk-sec">信用卡</div>
-            <div class="mk-acc"><b>招行信用卡</b><span class="num" style="color:var(--rose)">-2,187.30</span></div>
+            <div class="mk-sec" data-i18n="mk_sec_on">On Budget</div>
+            <div class="mk-acc"><b data-i18n="mk_acc_bank">Merchants Bank</b><span class="num">12,480.00</span></div>
+            <div class="mk-acc"><b data-i18n="mk_acc_alipay">Alipay</b><span class="num">3,206.55</span></div>
+            <div class="mk-sec" data-i18n="mk_sec_cc">Credit Cards</div>
+            <div class="mk-acc"><b data-i18n="mk_acc_card">CMB Credit Card</b><span class="num" style="color:var(--rose)">-2,187.30</span></div>
           </div>
           <div class="mk-main">
             <div class="mk-head">
-              <h3>2026 年 11 月</h3>
-              <span class="pill pill-ok"><i></i>待分配 ¥0.00</span>
-              <span class="chip">资金账龄 32 天</span>
+              <h3 data-i18n="mk_month">November 2026</h3>
+              <span class="pill pill-ok"><i></i><span data-i18n="mk_pill">Ready to Assign ¥0.00</span></span>
+              <span class="chip" data-i18n="mk_chip">Age of Money · 32 days</span>
             </div>
             <table class="mk-table num">
-              <thead><tr><th>分类</th><th>已分配</th><th>活动</th><th>剩余</th><th></th></tr></thead>
+              <thead><tr><th data-i18n="mk_th_cat">Category</th><th data-i18n="mk_th_assign">Assigned</th><th data-i18n="mk_th_act">Activity</th><th data-i18n="mk_th_avail">Available</th><th></th></tr></thead>
               <tbody>
                 <tr>
-                  <td><span class="mk-cat"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11h18l-1.5-6H4.5z"/><path d="M6 11v9M18 11v9"/></svg></span>餐饮美食</span></td>
+                  <td><span class="mk-cat"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11h18l-1.5-6H4.5z"/><path d="M6 11v9M18 11v9"/></svg></span><span data-i18n="mk_cat1">Dining</span></span></td>
                   <td class="r">1,200.00</td><td class="r neg">-856.40</td><td class="r">343.60</td>
                   <td><span class="bar"><i style="width:71%"></i></span></td>
                 </tr>
                 <tr>
-                  <td><span class="mk-cat"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="m5 21V7l7-4 7 4v14"/><path d="M10 21v-6h4v6"/></svg></span>住房房租</span></td>
+                  <td><span class="mk-cat"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="m5 21V7l7-4 7 4v14"/><path d="M10 21v-6h4v6"/></svg></span><span data-i18n="mk_cat2">Rent</span></span></td>
                   <td class="r">5,500.00</td><td class="r neg">-5,500.00</td><td class="r zero">0.00</td>
                   <td><span class="bar"><i style="width:100%"></i></span></td>
                 </tr>
                 <tr>
-                  <td><span class="mk-cat"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3a15 15 0 0 1 0 18M3 12h18"/></svg></span>储蓄 · 日本旅行</span></td>
+                  <td><span class="mk-cat"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3a15 15 0 0 1 0 18M3 12h18"/></svg></span><span data-i18n="mk_cat3">Savings · Japan</span></span></td>
                   <td class="r">2,000.00</td><td class="r neg">-500.00</td><td class="r">1,500.00</td>
                   <td><span class="bar"><i style="width:75%"></i></span></td>
                 </tr>
                 <tr>
-                  <td><span class="mk-cat"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg></span>订阅服务</span></td>
+                  <td><span class="mk-cat"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg></span><span data-i18n="mk_cat4">Subscriptions</span></span></td>
                   <td class="r">150.00</td><td class="r neg">-68.00</td><td class="r">82.00</td>
                   <td><span class="bar warn"><i style="width:45%"></i></span></td>
                 </tr>
@@ -590,10 +825,10 @@
   <section class="stats">
     <div class="wrap">
       <div class="stats-row">
-        <div class="stat rv"><b><em>信封记账</em></b><span>成熟方法论最佳实践,先分钱再花钱</span></div>
-        <div class="stat rv rv-d1"><b><em>AI 记账</em></b><span>一句话说清,自动记好分好类</span></div>
-        <div class="stat rv rv-d2"><b><em>微信 · 飞书</em></b><span>聊天窗口里记,随时随地</span></div>
-        <div class="stat rv rv-d3"><b><em>数据自有</em></b><span>不上云、不订阅,永远在你手里</span></div>
+        <div class="stat rv"><b><em data-i18n="stat1b">Envelopes</em></b><span data-i18n="stat1s">A proven method — assign first, spend later</span></div>
+        <div class="stat rv rv-d1"><b><em data-i18n="stat2b">AI bookkeeping</em></b><span data-i18n="stat2s">Say it once — recorded &amp; categorized</span></div>
+        <div class="stat rv rv-d2"><b><em data-i18n="stat3b">WeChat · Feishu</em></b><span data-i18n="stat3s">Log it right in your chat</span></div>
+        <div class="stat rv rv-d3"><b><em data-i18n="stat4b">Data ownership</em></b><span data-i18n="stat4s">No cloud, no subscription — ever</span></div>
       </div>
     </div>
   </section>
@@ -603,39 +838,39 @@
     <div class="wrap">
       <div class="sec-head rv">
         <div class="kicker">FEATURES</div>
-        <h2>把记账这件事,做完整</h2>
-        <p>从录入到复盘,从预算到报表——每一个环节都为「长期坚持」而设计。</p>
+        <h2 data-i18n="feat_h2">Money tracking, done right</h2>
+        <p data-i18n="feat_sub">From entry to review, budget to reports — every detail built to last.</p>
       </div>
       <div class="feat-grid">
         <div class="feat rv">
           <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="13" rx="3"/><path d="M16 12.5h.01"/><path d="M6 12.5h4"/></svg></div>
-          <h3>信封分配</h3>
-          <p>收入进账,先把钱分进一个个「信封」;<b>花之前先看信封里还剩多少</b>,不再月底对着账单惊讶。</p>
+          <h3 data-i18n="f1h">Envelope assigning</h3>
+          <p data-i18n="f1p">Assign income into envelopes first, then <b>check what's left before you spend</b> — no more month-end surprises.</p>
         </div>
         <div class="feat rv rv-d1">
           <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15l.7 1.8L21.5 17.5l-1.8.7L19 20l-.7-1.8-1.8-.7 1.8-.7z"/></svg></div>
-          <h3>一句话记账</h3>
-          <p>「记一笔午饭 35 元」「这个月餐饮花了多少」——<b>跟 AI 说一声就行</b>,帮你记好、分好、算好。</p>
+          <h3 data-i18n="f2h">One-line logging</h3>
+          <p data-i18n="f2p">“Log lunch, ¥35.” “Dining this month?” — <b>just tell the AI</b>; it records, categorizes and totals for you.</p>
         </div>
         <div class="feat rv rv-d2">
           <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z"/></svg></div>
-          <h3>微信 · 飞书随时记</h3>
-          <p>不用专门打开 App,在聊天软件里记账、查预算、看报表——<b>出门在外,一条消息的事</b>。</p>
+          <h3 data-i18n="f3h">WeChat · Feishu ready</h3>
+          <p data-i18n="f3p">No app to open — log, budget and read reports right in your chat. <b>One message, wherever you are.</b></p>
         </div>
         <div class="feat rv">
           <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></svg></div>
-          <h3>报表一目了然</h3>
-          <p>净资产走势、收支趋势、花钱构成、常去的商家——<b>一眼看清钱去哪儿了</b>,心里更有底。</p>
+          <h3 data-i18n="f4h">Reports at a glance</h3>
+          <p data-i18n="f4p">Net worth, trends, spending mix, top payees — <b>see where the money goes</b>, and feel the ground under you.</p>
         </div>
         <div class="feat rv rv-d1">
           <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 6 5 5 4-3 9 8"/><path d="M3 11v10"/><path d="M21 16v5"/></svg></div>
-          <h3>对账省心</h3>
-          <p>批量分类、快速清算、银行流水对账;退款<b>自动记回原来的支出</b>,不会算成收入。</p>
+          <h3 data-i18n="f5h">Painless reconciliation</h3>
+          <p data-i18n="f5p">Bulk categorize, quick clear, statement reconcile; refunds return to the <b>original category</b> — never as income.</p>
         </div>
         <div class="feat rv rv-d2">
           <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg></div>
-          <h3>每天自动备份</h3>
-          <p>账本每天定点自动备份,本地与云端各留版本——<b>换设备、误操作,都不怕丢</b>。</p>
+          <h3 data-i18n="f6h">Daily auto-backup</h3>
+          <p data-i18n="f6p">Your ledger backs up on schedule, kept locally and in the cloud — <b>safe from device swaps and slips of the hand</b>.</p>
         </div>
       </div>
     </div>
@@ -647,26 +882,26 @@
       <div class="ai-band rv">
         <div class="ai-grid">
           <div class="ai-copy">
-            <div class="kicker">AI AGENT · 记账搭子</div>
-            <h2>记账,像发消息一样自然</h2>
-            <p>「记一笔午饭 35 元,支付宝」「这个月餐饮花了多少」——发给 AI 就好。它帮你记好每一笔、分好每个信封,查账复盘也是一句话的事。</p>
-            <p><b>放心交出去</b>:AI 动你的账本之前一定先问你,点一下确认才算数。</p>
+            <div class="kicker" data-i18n="ai_kicker">AI AGENT · BUILT RIGHT IN</div>
+            <h2 data-i18n="ai_h2">Logging as easy as sending a message</h2>
+            <p data-i18n="ai_p1">“Log lunch, ¥35, Alipay.” “What did dining cost this month?” — just send it to the AI. It books every entry, fills every envelope, and answers in a single line.</p>
+            <p data-i18n="ai_p2"><b>Hand it over with confidence</b>: the AI always asks before touching your ledger — one tap to confirm.</p>
           </div>
           <div class="chat-card">
-            <div class="chat-top"><i class="c1"></i><i class="c2"></i><i class="c3"></i><span>AI 助手 · 小文预算</span></div>
+            <div class="chat-top"><i class="c1"></i><i class="c2"></i><i class="c3"></i><span data-i18n="chat_title">AI Assistant · Xiaowen Budget</span></div>
             <div class="chat-body">
-              <div class="bubble user">记一笔午饭 35 元,支付宝,餐饮分类</div>
+              <div class="bubble user" data-i18n="chat_user">Log lunch ¥35, Alipay, dining category</div>
               <div class="bubble ai">
-                好的,帮你整理成一笔支出:
-                <span class="entry"><i>餐饮美食</i><span class="e-r"><b>¥35.00</b><u>支付宝 · 11 月 14 日</u></span></span>
+                <span data-i18n="chat_ai">Sure — here's the expense I've prepared:</span>
+                <span class="entry"><i data-i18n="chat_entry_cat">Dining</i><span class="e-r"><b>¥35.00</b><u data-i18n="chat_entry_meta">Alipay · Nov 14</u></span></span>
               </div>
               <div class="confirm">
                 <div class="t">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.73 18l-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><path d="M12 9v4M12 17h.01"/></svg>
-                  AI 想帮你写进账本
+                  <span data-i18n="confirm_t">AI wants to write to your ledger</span>
                 </div>
-                <p>确认后这笔才真正记上;反悔点「取消」就行。</p>
-                <div class="acts"><button>取消</button><button class="ok">确认记上</button></div>
+                <p data-i18n="confirm_p">It only counts once you confirm — Cancel backs out anytime.</p>
+                <div class="acts"><button data-i18n="confirm_cancel">Cancel</button><button class="ok" data-i18n="confirm_ok">Confirm entry</button></div>
               </div>
             </div>
           </div>
@@ -681,20 +916,20 @@
       <div class="any-grid">
         <div class="ai-copy rv">
           <div class="kicker">ANYTIME · ANYWHERE</div>
-          <h2>出门在外,一条消息的事</h2>
-          <p>不用打开电脑,也不用专门开 App。微信、飞书里直接发消息:记一笔、查余额、看看这个月还剩多少——<b>几秒钟,顺手就记了</b>。</p>
-          <p>账记得越顺手,坚持得越久。<b>「随手能记」是记账能不能坚持下来的关键</b>——小文预算把入口搬到了你最常用的聊天窗口里。</p>
+          <h2 data-i18n="any_h2">Out and about? One message away.</h2>
+          <p data-i18n="any_p1">No computer, no dedicated app. Just message the bot in WeChat or Feishu: log an expense, check a balance, see what's left — <b>done in seconds</b>.</p>
+          <p data-i18n="any_p2">The easier it is to log, the longer you last. <b>Frictionless entry is what makes it stick</b> — so Xiaowen Budget lives in the chat window you already use.</p>
         </div>
         <div class="phone rv rv-d1">
           <div class="phone-top">
             <span class="avatar"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="13" rx="3"/><path d="M16 12.5h.01"/></svg></span>
-            <b>小文预算</b><span>在线</span>
+            <b data-i18n="phone_title">Xiaowen Budget</b><span data-i18n="phone_status">Online</span>
           </div>
           <div class="phone-body">
-            <div class="bubble user">午饭 35 支付宝</div>
-            <div class="bubble ai">已记好:餐饮 -¥35.00,本月餐饮信封还剩 ¥343.60 🍚</div>
-            <div class="bubble user">这个月餐饮花了多少?</div>
-            <div class="bubble ai">¥856.40,预算用了 71%。节奏很稳,继续加油 💪</div>
+            <div class="bubble user" data-i18n="ph_u1">lunch 35 alipay</div>
+            <div class="bubble ai" data-i18n="ph_a1">Done: Dining -¥35.00, ¥343.60 left in this month's envelope 🍚</div>
+            <div class="bubble user" data-i18n="ph_u2">How much on dining this month?</div>
+            <div class="bubble ai" data-i18n="ph_a2">¥856.40 — 71% of the dining budget. Nicely on pace, keep going 💪</div>
           </div>
         </div>
       </div>
@@ -706,25 +941,25 @@
     <div class="wrap">
       <div class="sec-head rv">
         <div class="kicker">THE METHOD</div>
-        <h2>信封记账法,这样做才有效</h2>
-        <p>先分钱,再花钱。把预算变成看得见的信封,而不是月底账单后的懊悔。</p>
+        <h2 data-i18n="m_h2">Envelope budgeting, done right</h2>
+        <p data-i18n="m_sub">Assign before you spend. Turn the budget into visible envelopes — not month-end regret.</p>
       </div>
       <div class="rules">
         <div class="rule rv">
-          <h3>给每一块钱一个任务</h3>
-          <p>收入到账先分配,直到每一块都有去处。花钱时心里有数,不再纠结。</p>
+          <h3 data-i18n="r1h">Give every dollar a job</h3>
+          <p data-i18n="r1p">Assign income as it arrives until every dollar has a home. Spend with clarity, not guilt.</p>
         </div>
         <div class="rule rv rv-d1">
-          <h3>拥抱真实支出</h3>
-          <p>房租、保险、旅行——大额开销提前按月攒进信封,账单来时从容不迫。</p>
+          <h3 data-i18n="r2h">Embrace true expenses</h3>
+          <p data-i18n="r2p">Rent, insurance, travel — save monthly for the big stuff, and bills lose their sting.</p>
         </div>
         <div class="rule rv rv-d2">
-          <h3>灵活调整</h3>
-          <p>计划赶不上变化?把预算挪个位置就好。预算跟着生活走,不苛责自己。</p>
+          <h3 data-i18n="r3h">Roll with it</h3>
+          <p data-i18n="r3p">Plans change? Move money between envelopes. The budget follows your life — not the other way around.</p>
         </div>
         <div class="rule rv rv-d3">
-          <h3>关注资金账龄</h3>
-          <p>钱在你手里待得越久,财务越从容——账龄,就是你自己的「松弛感」指标。</p>
+          <h3 data-i18n="r4h">Watch your age of money</h3>
+          <p data-i18n="r4p">The longer your money sits, the calmer your finances — age of money is your breathing-room metric.</p>
         </div>
       </div>
     </div>
@@ -735,26 +970,26 @@
     <div class="wrap">
       <div class="sec-head rv">
         <div class="kicker">GET STARTED</div>
-        <h2>两分钟,跑起来</h2>
-        <p>开源免费,数据从头到尾都落在你自己的机器上——一台电脑就够了。</p>
+        <h2 data-i18n="s_h2">Up and running in two minutes</h2>
+        <p data-i18n="s_sub">Free and open source. Your data never leaves your machine — a laptop is all it takes.</p>
       </div>
       <div class="start-grid">
         <div class="term rv">
-          <div class="term-top"><i class="c1"></i><i class="c2"></i><i class="c3"></i><span>源码运行</span></div>
-          <pre><span class="cm"># 克隆并安装</span>
+          <div class="term-top"><i class="c1"></i><i class="c2"></i><i class="c3"></i><span data-i18n="t1_title">From source</span></div>
+          <pre><span class="cm" data-i18n="t1_c1"># Clone &amp; install</span>
 <span class="pr">$</span> git clone https://github.com/iamshaynez/xiaowen-ynab
 <span class="pr">$</span> <span class="ar">cd</span> xiaowen-ynab && npm install
 
-<span class="cm"># 启动,打开浏览器就能开始记账</span>
+<span class="cm" data-i18n="t1_c2"># Start it, then open your browser to begin</span>
 <span class="pr">$</span> npm run dev</pre>
         </div>
         <div class="term rv rv-d1">
-          <div class="term-top"><i class="c1"></i><i class="c2"></i><i class="c3"></i><span>Docker</span></div>
-          <pre><span class="cm"># 一键启动,数据落在自己机器上</span>
+          <div class="term-top"><i class="c1"></i><i class="c2"></i><i class="c3"></i><span data-i18n="t2_title">Docker</span></div>
+          <pre><span class="cm" data-i18n="t2_c1"># One command — data stays on your machine</span>
 <span class="pr">$</span> docker compose up -d
 
-<span class="cm"># 每天,账本会自动备份</span>
-<span class="cm"># 你只管记账,其他交给它</span></pre>
+<span class="cm" data-i18n="t2_c2"># Your ledger backs up daily</span>
+<span class="cm" data-i18n="t2_c3"># You just record; it handles the rest</span></pre>
         </div>
       </div>
     </div>
@@ -763,8 +998,8 @@
   <!-- ============ CTA ============ -->
   <div class="final">
     <div class="wrap">
-      <h2 class="rv">钱的事,从<span class="grad">今天这笔</span>开始理清。</h2>
-      <p class="rv rv-d1">MIT 开源,无需注册,没有订阅。克隆下来,它就是你的。</p>
+      <h2 class="rv" data-i18n="fin_h2">Get your money in order, <span class="grad">starting today.</span></h2>
+      <p class="rv rv-d1" data-i18n="fin_p">Open source, no sign-up, no subscription. Clone it and it's yours.</p>
       <div class="hero-cta rv rv-d2">
         <a class="btn btn-primary" href="https://github.com/iamshaynez/xiaowen-ynab" target="_blank" rel="noreferrer">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.55 0-.27-.01-1.17-.02-2.12-3.2.7-3.87-1.36-3.87-1.36-.52-1.33-1.28-1.68-1.28-1.68-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.03 1.76 2.69 1.25 3.35.96.1-.75.4-1.25.72-1.54-2.55-.29-5.23-1.28-5.23-5.68 0-1.26.45-2.28 1.18-3.09-.12-.29-.51-1.46.11-3.05 0 0 .96-.31 3.16 1.18a11 11 0 0 1 5.76 0c2.19-1.49 3.15-1.18 3.15-1.18.63 1.59.24 2.76.12 3.05.74.81 1.18 1.83 1.18 3.09 0 4.41-2.69 5.38-5.25 5.67.41.35.78 1.05.78 2.12 0 1.53-.01 2.76-.01 3.14 0 .3.2.66.8.55A11.51 11.51 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5z"/></svg>
@@ -780,22 +1015,49 @@
     <div class="foot">
       <a class="brand" href="#">
         <img src="/favicon.svg" alt="logo" />
-        <span>小文预算 <span class="en">XIAOWEN BUDGET</span></span>
+        <span><span data-i18n="brand">Xiaowen Budget</span> <span class="en">XIAOWEN BUDGET</span></span>
       </a>
       <div class="foot-links">
         <a href="https://github.com/iamshaynez/xiaowen-ynab" target="_blank" rel="noreferrer">GitHub</a>
         <a href="https://github.com/iamshaynez/xiaowen-ynab/issues" target="_blank" rel="noreferrer">Issues</a>
         <a href="https://github.com/iamshaynez/xiaowen-ynab/blob/main/LICENSE" target="_blank" rel="noreferrer">MIT License</a>
-        <a href="#" id="toApp">打开应用</a>
+        <a href="#" id="toApp" data-i18n="foot_open">Open App</a>
       </div>
-      <div class="foot-note">
-        本页面为纯静态单文件,<b>无任何第三方脚本与追踪</b>——与主应用的本地优先原则一致。© <span id="yr">2026</span> iamshaynez
+      <div class="foot-note" data-i18n="foot_note">
+        A single static file — <b>no third-party scripts, no tracking</b> — true to the app's local-first spirit. © <span id="yr">2026</span> iamshaynez
       </div>
     </div>
   </div>
 </footer>
 
 <script>
+  // 多语言:应用字典(默认英文,HTML 基准语言即英文)
+  function applyLang(lang) {
+    var d = window.LANG_DICT[lang];
+    document.querySelectorAll("[data-i18n]").forEach(function (el) {
+      var v = d[el.getAttribute("data-i18n")];
+      if (v != null) el.innerHTML = v;
+    });
+    document.title = d.__title;
+    var md = document.querySelector('meta[name="description"]');
+    if (md) md.setAttribute("content", d.__desc);
+    document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
+    document.querySelectorAll(".lang-sw button").forEach(function (b) {
+      b.classList.toggle("active", b.getAttribute("data-lang") === lang);
+    });
+    var toApp = document.getElementById("toApp");
+    if (toApp) toApp.setAttribute("href", "/");
+  }
+  var lang = window.LANG || "en";
+  applyLang(lang);
+  document.querySelectorAll(".lang-sw button").forEach(function (b) {
+    b.addEventListener("click", function () {
+      lang = b.getAttribute("data-lang");
+      try { localStorage.setItem("landing_lang", lang); } catch (e) {}
+      applyLang(lang);
+    });
+  });
+
   // 导航滚动态
   var nav = document.getElementById("nav");
   var onScroll = function () { nav.classList.toggle("scrolled", window.scrollY > 24); };
@@ -812,9 +1074,6 @@
     if (el.getBoundingClientRect().top < window.innerHeight) el.classList.add("in");
     else io.observe(el);
   });
-
-  // 页脚「打开应用」→ 站点根
-  document.getElementById("toApp").setAttribute("href", "/");
 
   document.getElementById("yr").textContent = new Date().getFullYear();
 </script>
