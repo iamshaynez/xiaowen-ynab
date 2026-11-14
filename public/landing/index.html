@@ -1,0 +1,822 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+<meta name="description" content="小文预算——本地优先的信封记账法应用:结合 AI 助手,一句话记账;微信、飞书随时随地说一声就好;数据永远在你自己手里。" />
+<title>小文预算 Xiaowen Budget · 信封记账法 × AI 记账</title>
+<style>
+  /* ---------- theme:与主应用 styles.css 同源 ---------- */
+  :root {
+    --navy-950: #0a0e1f;
+    --navy-900: #10152e;
+    --navy-850: #141b38;
+    --navy-800: #192242;
+    --navy-750: #1d2750;
+    --navy-600: #313d70;
+    --brand-200: #c6cbff;
+    --brand-300: #a3a8fc;
+    --brand-400: #8183f8;
+    --brand-500: #6a63f0;
+    --brand-600: #5b48e0;
+    --brand-700: #4c3ac2;
+    --ink-1: #eef1fa;
+    --ink-2: #a6b0cb;
+    --ink-3: #6b7694;
+    --line: rgba(255, 255, 255, 0.07);
+    --line-2: rgba(255, 255, 255, 0.12);
+    --emerald: #34d399;
+    --rose: #fb7185;
+    --amber: #fbbf24;
+    --grad: linear-gradient(135deg, #8183f8 0%, #6a63f0 45%, #4f8cff 100%);
+    --font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+      "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+    --mono: "SF Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: var(--font);
+    background: var(--navy-950);
+    color: var(--ink-1);
+    -webkit-font-smoothing: antialiased;
+    font-feature-settings: "tnum" 1;
+    overflow-x: hidden;
+    line-height: 1.6;
+  }
+
+  .num { font-variant-numeric: tabular-nums; }
+  a { color: inherit; text-decoration: none; }
+
+  /* ---------- 背景层:网格 + 光晕 ---------- */
+  .bg-grid {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.028) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.028) 1px, transparent 1px);
+    background-size: 56px 56px;
+    -webkit-mask-image: radial-gradient(ellipse 90% 62% at 50% -6%, #000 35%, transparent 78%);
+    mask-image: radial-gradient(ellipse 90% 62% at 50% -6%, #000 35%, transparent 78%);
+  }
+  .glow { position: fixed; border-radius: 50%; filter: blur(90px); pointer-events: none; z-index: 0; }
+  .glow-1 { width: 640px; height: 640px; left: -180px; top: -220px; background: rgba(91, 72, 224, 0.16); }
+  .glow-2 { width: 560px; height: 560px; right: -160px; top: -120px; background: rgba(79, 140, 255, 0.10); }
+  .glow-3 { width: 720px; height: 720px; left: 50%; transform: translateX(-50%); top: 640px; background: rgba(106, 99, 240, 0.07); }
+
+  main, nav, footer { position: relative; z-index: 1; }
+
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+
+  /* ---------- 导航 ---------- */
+  nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 50;
+    transition: background 0.25s, border-color 0.25s, backdrop-filter 0.25s;
+    border-bottom: 1px solid transparent;
+  }
+  nav.scrolled {
+    background: rgba(10, 14, 31, 0.72);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border-bottom-color: var(--line);
+  }
+  .nav-inner {
+    max-width: 1120px; margin: 0 auto; padding: 0 24px;
+    height: 64px; display: flex; align-items: center; gap: 28px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 15px; }
+  .brand img { width: 30px; height: 30px; border-radius: 8px; }
+  .brand .en { color: var(--ink-3); font-weight: 500; font-size: 12px; letter-spacing: 0.04em; }
+  .nav-links { display: flex; gap: 4px; margin-left: 12px; }
+  .nav-links a {
+    padding: 7px 12px; border-radius: 9px; font-size: 13.5px; color: var(--ink-2);
+    transition: color 0.15s, background 0.15s;
+  }
+  .nav-links a:hover { color: var(--ink-1); background: rgba(255, 255, 255, 0.06); }
+  .nav-right { margin-left: auto; display: flex; align-items: center; gap: 14px; }
+  .nav-gh {
+    display: flex; align-items: center; gap: 7px; font-size: 13.5px; color: var(--ink-2);
+    padding: 7px 12px; border-radius: 9px; transition: color 0.15s, background 0.15s;
+  }
+  .nav-gh:hover { color: var(--ink-1); background: rgba(255, 255, 255, 0.06); }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    border-radius: 12px; font-weight: 600; font-size: 14px;
+    padding: 10px 18px; cursor: pointer; border: none;
+    transition: transform 0.15s, box-shadow 0.15s, background 0.15s, border-color 0.15s;
+  }
+  .btn:hover { transform: translateY(-1px); }
+  .btn-primary { background: var(--grad); color: #fff; box-shadow: 0 6px 22px rgba(91, 72, 224, 0.35); }
+  .btn-primary:hover { box-shadow: 0 8px 28px rgba(91, 72, 224, 0.5); }
+  .btn-ghost {
+    background: rgba(255, 255, 255, 0.04); color: var(--ink-1);
+    border: 1px solid var(--line-2);
+  }
+  .btn-ghost:hover { background: rgba(255, 255, 255, 0.08); border-color: rgba(255, 255, 255, 0.2); }
+  .btn-sm { padding: 8px 15px; font-size: 13px; border-radius: 10px; }
+  .btn svg { flex-shrink: 0; }
+  .brand > span { white-space: nowrap; }
+  .btn { white-space: nowrap; }
+
+  /* 深色滚动条(代码块) */
+  .term pre::-webkit-scrollbar { height: 6px; }
+  .term pre::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.16); border-radius: 99px; }
+  .term pre::-webkit-scrollbar-track { background: transparent; }
+
+  /* ---------- Hero ---------- */
+  .hero { padding: 148px 0 40px; text-align: center; }
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 12.5px; letter-spacing: 0.12em; color: var(--brand-300);
+    border: 1px solid rgba(129, 131, 248, 0.35); border-radius: 999px;
+    padding: 6px 16px; background: rgba(106, 99, 240, 0.10);
+  }
+  .eyebrow::before {
+    content: ""; width: 6px; height: 6px; border-radius: 50%;
+    background: var(--brand-400); box-shadow: 0 0 8px var(--brand-400);
+  }
+  .hero h1 {
+    margin: 26px auto 20px; font-weight: 800; letter-spacing: -0.02em;
+    font-size: clamp(40px, 6.4vw, 72px); line-height: 1.14;
+  }
+  .hero h1 .grad {
+    background: var(--grad);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .hero .sub {
+    max-width: 620px; margin: 0 auto 34px; color: var(--ink-2);
+    font-size: clamp(15px, 1.6vw, 17.5px); line-height: 1.8;
+  }
+  .hero .sub strong { color: var(--ink-1); font-weight: 600; }
+  .hero-cta { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+  .hero-cta .btn { padding: 12px 24px; font-size: 15px; }
+
+  /* ---------- 应用窗口 mockup ---------- */
+  .mockup-zone { position: relative; margin-top: 64px; }
+  .mockup {
+    max-width: 880px; margin: 0 auto; border-radius: 16px; overflow: hidden;
+    background: var(--navy-900); border: 1px solid var(--line-2);
+    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5), 0 4px 20px rgba(91, 72, 224, 0.14);
+    display: grid; grid-template-columns: 200px 1fr; text-align: left;
+  }
+  .mk-side { background: var(--navy-950); border-right: 1px solid var(--line); padding: 16px 12px; }
+  .mk-logo { display: flex; align-items: center; gap: 8px; padding: 0 8px 14px; }
+  .mk-logo .dot {
+    width: 26px; height: 26px; border-radius: 8px; background: var(--grad);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .mk-logo .dot svg { width: 14px; height: 14px; }
+  .mk-logo span { font-size: 12.5px; font-weight: 700; }
+  .mk-nav { display: flex; flex-direction: column; gap: 2px; }
+  .mk-nav a {
+    display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--ink-2);
+    padding: 6px 9px; border-radius: 7px;
+  }
+  .mk-nav a svg { width: 12px; height: 12px; opacity: 0.75; }
+  .mk-nav a.on { background: var(--grad); color: #fff; font-weight: 600; }
+  .mk-nav a:not(.on):hover { background: rgba(255, 255, 255, 0.05); }
+  .mk-sec { font-size: 9.5px; letter-spacing: 0.14em; color: var(--ink-3); text-transform: uppercase; padding: 12px 9px 4px; }
+  .mk-acc { display: flex; justify-content: space-between; font-size: 11px; color: var(--ink-2); padding: 4px 9px; }
+  .mk-acc b { font-weight: 500; }
+  .mk-acc .num { color: var(--ink-3); }
+
+  .mk-main { padding: 18px 22px 20px; }
+  .mk-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+  .mk-head h3 { font-size: 15px; font-weight: 700; }
+  .pill {
+    font-size: 11px; font-weight: 600; border-radius: 999px; padding: 3px 11px;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .pill-ok { background: rgba(52, 211, 153, 0.14); color: var(--emerald); border: 1px solid rgba(52, 211, 153, 0.3); }
+  .pill-ok i { width: 6px; height: 6px; border-radius: 50%; background: var(--emerald); display: inline-block; }
+  .chip {
+    margin-left: auto; font-size: 10.5px; color: var(--ink-3);
+    border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px;
+  }
+  .mk-table { width: 100%; border-collapse: collapse; }
+  .mk-table th {
+    font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3);
+    text-align: right; font-weight: 600; padding: 6px 4px; border-bottom: 1px solid var(--line);
+  }
+  .mk-table th:first-child { text-align: left; }
+  .mk-table td { padding: 8px 4px; border-bottom: 1px solid rgba(255, 255, 255, 0.045); font-size: 12px; }
+  .mk-table tr:last-child td { border-bottom: none; }
+  .mk-cat { display: flex; align-items: center; gap: 8px; font-weight: 500; font-size: 12px; }
+  .mk-cat .ico {
+    width: 22px; height: 22px; border-radius: 6px; background: rgba(255, 255, 255, 0.07);
+    display: inline-flex; align-items: center; justify-content: center; color: var(--ink-2); flex-shrink: 0;
+  }
+  .mk-cat .ico svg { width: 11px; height: 11px; }
+  .mk-table td.r { text-align: right; color: var(--ink-2); }
+  .bar { width: 92px; height: 5px; background: rgba(255, 255, 255, 0.09); border-radius: 99px; overflow: hidden; margin-left: auto; }
+  .bar i { display: block; height: 100%; border-radius: 99px; background: var(--grad); }
+  .bar.warn i { background: linear-gradient(90deg, #fbbf24, #f59e0b); }
+  .pos { color: var(--emerald) !important; font-weight: 600; }
+  .neg { color: var(--rose) !important; }
+  .zero { color: var(--emerald) !important; font-weight: 600; }
+
+  /* 漂浮徽章 */
+  .float-chip {
+    position: absolute; display: flex; align-items: center; gap: 8px;
+    background: rgba(20, 27, 56, 0.92); backdrop-filter: blur(8px);
+    border: 1px solid var(--line-2); border-radius: 12px; padding: 9px 14px;
+    font-size: 12px; font-weight: 500; box-shadow: 0 12px 34px rgba(0, 0, 0, 0.4);
+    animation: floaty 5.5s ease-in-out infinite;
+  }
+  .float-chip svg { width: 14px; height: 14px; }
+  .fc-1 { top: -32px; right: 3%; color: var(--emerald); }
+  .fc-2 { bottom: -16px; left: 8%; color: var(--brand-300); animation-delay: -2.6s; }
+  @keyframes floaty {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-7px); }
+  }
+
+  /* ---------- 通用 section ---------- */
+  section { padding: 96px 0; }
+  .sec-head { text-align: center; max-width: 640px; margin: 0 auto 56px; }
+  .sec-head .kicker {
+    font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--brand-300); font-weight: 600;
+  }
+  .sec-head h2 { font-size: clamp(26px, 3.6vw, 38px); font-weight: 800; letter-spacing: -0.015em; margin: 14px 0 14px; }
+  .sec-head p { color: var(--ink-2); font-size: 15.5px; line-height: 1.8; }
+
+  /* ---------- 数据条 ---------- */
+  .stats { padding: 26px 0 10px; }
+  .stats-row {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px;
+    max-width: 880px; margin: 0 auto;
+  }
+  .stat {
+    text-align: center; padding: 22px 10px; border-radius: 16px;
+    background: rgba(255, 255, 255, 0.025); border: 1px solid var(--line);
+    transition: border-color 0.2s, background 0.2s;
+  }
+  .stat:hover { border-color: var(--line-2); background: rgba(255, 255, 255, 0.045); }
+  .stat b { font-size: clamp(22px, 2.6vw, 30px); font-weight: 800; display: block; letter-spacing: -0.01em; }
+  .stat b em { font-style: normal; background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .stat span { font-size: 12.5px; color: var(--ink-3); display: block; margin-top: 5px; }
+
+  /* ---------- 特性网格 ---------- */
+  .feat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .feat {
+    padding: 26px 24px; border-radius: 18px;
+    background: rgba(255, 255, 255, 0.028); border: 1px solid var(--line);
+    transition: transform 0.2s, border-color 0.2s, background 0.2s, box-shadow 0.2s;
+  }
+  .feat:hover {
+    transform: translateY(-3px); border-color: rgba(129, 131, 248, 0.4);
+    background: rgba(106, 99, 240, 0.06); box-shadow: 0 14px 40px rgba(0, 0, 0, 0.3);
+  }
+  .feat .ico {
+    width: 42px; height: 42px; border-radius: 12px; margin-bottom: 18px;
+    background: linear-gradient(135deg, rgba(129, 131, 248, 0.2), rgba(79, 140, 255, 0.14));
+    border: 1px solid rgba(129, 131, 248, 0.3);
+    display: flex; align-items: center; justify-content: center; color: var(--brand-300);
+  }
+  .feat .ico svg { width: 20px; height: 20px; }
+  .feat h3 { font-size: 16.5px; font-weight: 700; margin-bottom: 8px; }
+  .feat p { font-size: 13.5px; color: var(--ink-2); line-height: 1.75; }
+  .feat p b { color: var(--ink-1); font-weight: 600; }
+
+  /* ---------- AI showcase ---------- */
+  .ai-band {
+    border-radius: 24px; border: 1px solid rgba(129, 131, 248, 0.28);
+    background: linear-gradient(160deg, rgba(106, 99, 240, 0.10) 0%, rgba(16, 21, 46, 0.4) 55%);
+    padding: 56px clamp(20px, 5vw, 64px); overflow: hidden; position: relative;
+  }
+  .ai-band::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: radial-gradient(560px 300px at 85% 0%, rgba(79, 140, 255, 0.12), transparent 70%);
+  }
+  .ai-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: center; position: relative; }
+  .ai-copy .kicker { font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--brand-300); font-weight: 600; }
+  .ai-copy h2 { font-size: clamp(24px, 3.2vw, 34px); font-weight: 800; margin: 14px 0 16px; letter-spacing: -0.015em; }
+  .ai-copy p { color: var(--ink-2); font-size: 15px; line-height: 1.85; }
+  .ai-copy p + p { margin-top: 12px; }
+  .ai-copy p b { color: var(--ink-1); font-weight: 600; }
+
+  .chat-card {
+    background: var(--navy-900); border: 1px solid var(--line-2); border-radius: 16px;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45); overflow: hidden;
+  }
+  .chat-top {
+    display: flex; align-items: center; gap: 8px; padding: 11px 16px;
+    border-bottom: 1px solid var(--line); background: var(--navy-850);
+  }
+  .chat-top i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .chat-top .c1 { background: #ff5f57; } .chat-top .c2 { background: #febc2e; } .chat-top .c3 { background: #28c840; }
+  .chat-top span { margin-left: 8px; font-size: 12px; color: var(--ink-3); }
+  .chat-body { padding: 18px 16px 20px; display: flex; flex-direction: column; gap: 12px; }
+  .bubble { max-width: 86%; padding: 10px 14px; border-radius: 14px; font-size: 13px; line-height: 1.65; }
+  .bubble.user {
+    align-self: flex-end; background: var(--grad); color: #fff;
+    border-bottom-right-radius: 4px; font-weight: 500;
+  }
+  .bubble.ai {
+    align-self: flex-start; background: var(--navy-800); border: 1px solid var(--line);
+    border-bottom-left-radius: 4px; color: var(--ink-2);
+  }
+  .bubble.ai .entry {
+    display: flex; align-items: center; gap: 12px; margin-top: 8px;
+    padding: 11px 13px; border-radius: 10px;
+    background: var(--navy-950); border: 1px solid var(--line);
+  }
+  .bubble.ai .entry i { font-style: normal; font-size: 12.5px; color: var(--ink-1); font-weight: 600; flex: 1; }
+  .bubble.ai .entry .e-r { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
+  .bubble.ai .entry b { font-size: 14px; color: var(--rose); font-weight: 700; font-variant-numeric: tabular-nums; }
+  .bubble.ai .entry u { text-decoration: none; font-size: 10.5px; color: var(--ink-3); }
+  .confirm {
+    align-self: stretch; margin-top: 2px; border-radius: 12px;
+    border: 1px solid rgba(251, 191, 36, 0.4); background: rgba(251, 191, 36, 0.08);
+    padding: 12px 14px;
+  }
+  .confirm .t { display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 600; color: var(--amber); }
+  .confirm .t svg { width: 14px; height: 14px; }
+  .confirm p { font-size: 11.5px; color: var(--ink-2); margin-top: 5px; line-height: 1.6; }
+  .confirm .acts { display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px; }
+  .confirm .acts button {
+    font-family: var(--font); font-size: 11.5px; font-weight: 600; cursor: pointer;
+    border-radius: 8px; padding: 5px 14px; border: 1px solid var(--line-2);
+    background: transparent; color: var(--ink-2);
+  }
+  .confirm .acts .ok { background: var(--grad); border: none; color: #fff; }
+
+  /* ---------- 随时随地(IM 手机) ---------- */
+  .any-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: center; }
+  .phone {
+    max-width: 350px; margin: 0 auto; border-radius: 22px; overflow: hidden;
+    background: var(--navy-900); border: 1px solid var(--line-2);
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+    transform: rotate(1.2deg);
+  }
+  .phone-top {
+    display: flex; align-items: center; gap: 10px; padding: 12px 16px;
+    background: var(--navy-850); border-bottom: 1px solid var(--line);
+  }
+  .phone-top .avatar {
+    width: 30px; height: 30px; border-radius: 9px; background: var(--grad);
+    display: flex; align-items: center; justify-content: center; color: #fff;
+  }
+  .phone-top .avatar svg { width: 15px; height: 15px; }
+  .phone-top b { font-size: 13px; }
+  .phone-top span {
+    margin-left: auto; font-size: 10.5px; color: var(--emerald);
+    display: inline-flex; align-items: center; gap: 5px;
+  }
+  .phone-top span::before {
+    content: ""; width: 6px; height: 6px; border-radius: 50%;
+    background: var(--emerald); box-shadow: 0 0 6px var(--emerald);
+  }
+  .phone-body {
+    padding: 16px 14px 18px; display: flex; flex-direction: column; gap: 10px;
+    background: var(--navy-950);
+  }
+  .phone .bubble { font-size: 12.5px; }
+
+  /* ---------- 四法则 ---------- */
+  .rules { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; counter-reset: rule; }
+  .rule {
+    position: relative; padding: 26px 22px; border-radius: 18px;
+    background: rgba(255, 255, 255, 0.028); border: 1px solid var(--line);
+    transition: transform 0.2s, border-color 0.2s;
+  }
+  .rule:hover { transform: translateY(-3px); border-color: rgba(129, 131, 248, 0.4); }
+  .rule::before {
+    counter-increment: rule; content: "0" counter(rule);
+    font-size: 13px; font-weight: 800; letter-spacing: 0.06em;
+    background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .rule h3 { font-size: 15.5px; font-weight: 700; margin: 10px 0 8px; }
+  .rule p { font-size: 13px; color: var(--ink-2); line-height: 1.75; }
+
+  /* ---------- 快速开始 ---------- */
+  .start-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; max-width: 880px; margin: 0 auto; }
+  .term {
+    border-radius: 16px; overflow: hidden; border: 1px solid var(--line-2);
+    background: var(--navy-900); box-shadow: 0 16px 44px rgba(0, 0, 0, 0.35);
+    transition: transform 0.2s, border-color 0.2s;
+  }
+  .term:hover { transform: translateY(-3px); border-color: rgba(129, 131, 248, 0.4); }
+  .term-top {
+    display: flex; align-items: center; gap: 7px; padding: 11px 16px;
+    background: var(--navy-850); border-bottom: 1px solid var(--line);
+  }
+  .term-top i { width: 10px; height: 10px; border-radius: 50%; }
+  .term-top .c1 { background: #ff5f57; } .term-top .c2 { background: #febc2e; } .term-top .c3 { background: #28c840; }
+  .term-top span { margin-left: 8px; font-size: 12px; color: var(--ink-3); font-family: var(--mono); }
+  .term pre {
+    padding: 18px 20px 22px; font-family: var(--mono); font-size: 12.5px;
+    line-height: 2.05; color: #cbd5f5; overflow-x: auto;
+  }
+  .term .cm { color: var(--ink-3); }
+  .term .pr { color: var(--emerald); }
+  .term .ar { color: var(--brand-300); }
+
+  /* ---------- CTA band ---------- */
+  .final { text-align: center; padding: 110px 0 120px; }
+  .final h2 { font-size: clamp(28px, 4.4vw, 44px); font-weight: 800; letter-spacing: -0.02em; }
+  .final h2 .grad { background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .final p { color: var(--ink-2); margin: 16px auto 34px; max-width: 480px; font-size: 15.5px; }
+  .final .hero-cta { margin-bottom: 0; }
+
+  /* ---------- Footer ---------- */
+  footer { border-top: 1px solid var(--line); padding: 34px 0 40px; }
+  .foot { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+  .foot .brand { font-size: 13.5px; }
+  .foot .brand img { width: 24px; height: 24px; border-radius: 6px; }
+  .foot-links { margin-left: auto; display: flex; gap: 20px; font-size: 13px; color: var(--ink-3); flex-wrap: wrap; }
+  .foot-links a { transition: color 0.15s; }
+  .foot-links a:hover { color: var(--ink-1); }
+  .foot-note { width: 100%; margin-top: 14px; font-size: 12px; color: var(--ink-3); }
+  .foot-note b { color: var(--ink-2); font-weight: 500; }
+
+  /* ---------- 入场动画 ---------- */
+  .rv { opacity: 0; transform: translateY(18px); transition: opacity 0.6s ease, transform 0.6s ease; }
+  .rv.in { opacity: 1; transform: none; }
+  .rv-d1 { transition-delay: 0.08s; } .rv-d2 { transition-delay: 0.16s; }
+  .rv-d3 { transition-delay: 0.24s; } .rv-d4 { transition-delay: 0.32s; }
+  .rv-d5 { transition-delay: 0.4s; }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    .rv { opacity: 1; transform: none; transition: none; }
+    .float-chip { animation: none; }
+  }
+
+  /* ---------- 响应式 ---------- */
+  @media (max-width: 960px) {
+    .feat-grid { grid-template-columns: repeat(2, 1fr); }
+    .rules { grid-template-columns: repeat(2, 1fr); }
+    .ai-grid, .any-grid { grid-template-columns: 1fr; gap: 34px; }
+    .phone { transform: none; }
+  }
+  @media (max-width: 720px) {
+    .nav-links { display: none; }
+    .brand .en { display: none; }
+    .nav-inner { gap: 12px; }
+    .nav-right { gap: 8px; }
+    .nav-gh svg { display: none; }
+    .hero { padding-top: 118px; }
+    .mockup { grid-template-columns: 1fr; }
+    .mk-side { display: none; }
+    .stats-row { grid-template-columns: repeat(2, 1fr); }
+    .feat-grid, .rules, .start-grid { grid-template-columns: 1fr; }
+    .fc-1 { right: 2%; } .fc-2 { left: 2%; }
+    section { padding: 72px 0; }
+    .bar { width: 60px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="bg-grid"></div>
+<div class="glow glow-1"></div>
+<div class="glow glow-2"></div>
+<div class="glow glow-3"></div>
+
+<nav id="nav">
+  <div class="nav-inner">
+    <a class="brand" href="#">
+      <img src="/favicon.svg" alt="小文预算 logo" />
+      <span>小文预算 <span class="en">XIAOWEN BUDGET</span></span>
+    </a>
+    <div class="nav-links">
+      <a href="#features">特性</a>
+      <a href="#ai">AI 记账</a>
+      <a href="#anywhere">随时随地</a>
+      <a href="#philosophy">方法</a>
+      <a href="#start">快速开始</a>
+    </div>
+    <div class="nav-right">
+      <a class="nav-gh" href="https://github.com/iamshaynez/xiaowen-ynab" target="_blank" rel="noreferrer">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.55 0-.27-.01-1.17-.02-2.12-3.2.7-3.87-1.36-3.87-1.36-.52-1.33-1.28-1.68-1.28-1.68-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.03 1.76 2.69 1.25 3.35.96.1-.75.4-1.25.72-1.54-2.55-.29-5.23-1.28-5.23-5.68 0-1.26.45-2.28 1.18-3.09-.12-.29-.51-1.46.11-3.05 0 0 .96-.31 3.16 1.18a11 11 0 0 1 5.76 0c2.19-1.49 3.15-1.18 3.15-1.18.63 1.59.24 2.76.12 3.05.74.81 1.18 1.83 1.18 3.09 0 4.41-2.69 5.38-5.25 5.67.41.35.78 1.05.78 2.12 0 1.53-.01 2.76-.01 3.14 0 .3.2.66.8.55A11.51 11.51 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5z"/></svg>
+        GitHub
+      </a>
+      <a class="btn btn-primary btn-sm" href="#start">开始使用</a>
+    </div>
+  </div>
+</nav>
+
+<main>
+  <!-- ============ Hero ============ -->
+  <header class="hero">
+    <div class="wrap">
+      <div class="eyebrow rv">ENVELOPE BUDGETING · 信封记账法</div>
+      <h1 class="rv rv-d1">给每一块钱,<br /><span class="grad">一个任务。</span></h1>
+      <p class="sub rv rv-d2">
+        完全跑在<strong>你自己电脑上</strong>的记账工具——遵循<strong>信封记账法</strong>最佳实践,
+        结合 AI 助手,发条消息就能记账。<strong>微信、飞书</strong>,随时随地;数据永远在你手里。
+      </p>
+      <div class="hero-cta rv rv-d3">
+        <a class="btn btn-primary" href="https://github.com/iamshaynez/xiaowen-ynab" target="_blank" rel="noreferrer">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.55 0-.27-.01-1.17-.02-2.12-3.2.7-3.87-1.36-3.87-1.36-.52-1.33-1.28-1.68-1.28-1.68-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.03 1.76 2.69 1.25 3.35.96.1-.75.4-1.25.72-1.54-2.55-.29-5.23-1.28-5.23-5.68 0-1.26.45-2.28 1.18-3.09-.12-.29-.51-1.46.11-3.05 0 0 .96-.31 3.16 1.18a11 11 0 0 1 5.76 0c2.19-1.49 3.15-1.18 3.15-1.18.63 1.59.24 2.76.12 3.05.74.81 1.18 1.83 1.18 3.09 0 4.41-2.69 5.38-5.25 5.67.41.35.78 1.05.78 2.12 0 1.53-.01 2.76-.01 3.14 0 .3.2.66.8.55A11.51 11.51 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5z"/></svg>
+          查看源码
+        </a>
+        <a class="btn btn-ghost" href="#start">
+          快速开始
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>
+        </a>
+      </div>
+
+      <!-- 应用窗口 mockup -->
+      <div class="mockup-zone rv rv-d4">
+        <div class="float-chip fc-1">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+          AI 已确认写入 · 午饭 ¥35
+        </div>
+        <div class="float-chip fc-2">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>
+          刷信用卡 · 预算额度自动扣减
+        </div>
+        <div class="mockup" aria-hidden="true">
+          <div class="mk-side">
+            <div class="mk-logo">
+              <span class="dot"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="13" rx="3"/><path d="M16 12.5h.01"/></svg></span>
+              <span>小文预算</span>
+            </div>
+            <div class="mk-nav">
+              <a class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="13" rx="3"/><path d="M16 12.5h.01"/></svg>预算</a>
+              <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="m3 8 9-5 9 5"/><path d="M5 8v13M19 8v13"/></svg>账户</a>
+              <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 6 5 5 4-3 9 8"/><path d="M3 11v10"/></svg>报表</a>
+              <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/></svg>AI 助手</a>
+            </div>
+            <div class="mk-sec">预算内账户</div>
+            <div class="mk-acc"><b>招商银行</b><span class="num">12,480.00</span></div>
+            <div class="mk-acc"><b>支付宝</b><span class="num">3,206.55</span></div>
+            <div class="mk-sec">信用卡</div>
+            <div class="mk-acc"><b>招行信用卡</b><span class="num" style="color:var(--rose)">-2,187.30</span></div>
+          </div>
+          <div class="mk-main">
+            <div class="mk-head">
+              <h3>2026 年 11 月</h3>
+              <span class="pill pill-ok"><i></i>待分配 ¥0.00</span>
+              <span class="chip">资金账龄 32 天</span>
+            </div>
+            <table class="mk-table num">
+              <thead><tr><th>分类</th><th>已分配</th><th>活动</th><th>剩余</th><th></th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><span class="mk-cat"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11h18l-1.5-6H4.5z"/><path d="M6 11v9M18 11v9"/></svg></span>餐饮美食</span></td>
+                  <td class="r">1,200.00</td><td class="r neg">-856.40</td><td class="r">343.60</td>
+                  <td><span class="bar"><i style="width:71%"></i></span></td>
+                </tr>
+                <tr>
+                  <td><span class="mk-cat"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="m5 21V7l7-4 7 4v14"/><path d="M10 21v-6h4v6"/></svg></span>住房房租</span></td>
+                  <td class="r">5,500.00</td><td class="r neg">-5,500.00</td><td class="r zero">0.00</td>
+                  <td><span class="bar"><i style="width:100%"></i></span></td>
+                </tr>
+                <tr>
+                  <td><span class="mk-cat"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3a15 15 0 0 1 0 18M3 12h18"/></svg></span>储蓄 · 日本旅行</span></td>
+                  <td class="r">2,000.00</td><td class="r neg">-500.00</td><td class="r">1,500.00</td>
+                  <td><span class="bar"><i style="width:75%"></i></span></td>
+                </tr>
+                <tr>
+                  <td><span class="mk-cat"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg></span>订阅服务</span></td>
+                  <td class="r">150.00</td><td class="r neg">-68.00</td><td class="r">82.00</td>
+                  <td><span class="bar warn"><i style="width:45%"></i></span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ============ 数据条 ============ -->
+  <section class="stats">
+    <div class="wrap">
+      <div class="stats-row">
+        <div class="stat rv"><b><em>信封记账</em></b><span>成熟方法论最佳实践,先分钱再花钱</span></div>
+        <div class="stat rv rv-d1"><b><em>AI 记账</em></b><span>一句话说清,自动记好分好类</span></div>
+        <div class="stat rv rv-d2"><b><em>微信 · 飞书</em></b><span>聊天窗口里记,随时随地</span></div>
+        <div class="stat rv rv-d3"><b><em>数据自有</em></b><span>不上云、不订阅,永远在你手里</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 特性 ============ -->
+  <section id="features">
+    <div class="wrap">
+      <div class="sec-head rv">
+        <div class="kicker">FEATURES</div>
+        <h2>把记账这件事,做完整</h2>
+        <p>从录入到复盘,从预算到报表——每一个环节都为「长期坚持」而设计。</p>
+      </div>
+      <div class="feat-grid">
+        <div class="feat rv">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="13" rx="3"/><path d="M16 12.5h.01"/><path d="M6 12.5h4"/></svg></div>
+          <h3>信封分配</h3>
+          <p>收入进账,先把钱分进一个个「信封」;<b>花之前先看信封里还剩多少</b>,不再月底对着账单惊讶。</p>
+        </div>
+        <div class="feat rv rv-d1">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15l.7 1.8L21.5 17.5l-1.8.7L19 20l-.7-1.8-1.8-.7 1.8-.7z"/></svg></div>
+          <h3>一句话记账</h3>
+          <p>「记一笔午饭 35 元」「这个月餐饮花了多少」——<b>跟 AI 说一声就行</b>,帮你记好、分好、算好。</p>
+        </div>
+        <div class="feat rv rv-d2">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z"/></svg></div>
+          <h3>微信 · 飞书随时记</h3>
+          <p>不用专门打开 App,在聊天软件里记账、查预算、看报表——<b>出门在外,一条消息的事</b>。</p>
+        </div>
+        <div class="feat rv">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></svg></div>
+          <h3>报表一目了然</h3>
+          <p>净资产走势、收支趋势、花钱构成、常去的商家——<b>一眼看清钱去哪儿了</b>,心里更有底。</p>
+        </div>
+        <div class="feat rv rv-d1">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 6 5 5 4-3 9 8"/><path d="M3 11v10"/><path d="M21 16v5"/></svg></div>
+          <h3>对账省心</h3>
+          <p>批量分类、快速清算、银行流水对账;退款<b>自动记回原来的支出</b>,不会算成收入。</p>
+        </div>
+        <div class="feat rv rv-d2">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg></div>
+          <h3>每天自动备份</h3>
+          <p>账本每天定点自动备份,本地与云端各留版本——<b>换设备、误操作,都不怕丢</b>。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ AI showcase ============ -->
+  <section id="ai">
+    <div class="wrap">
+      <div class="ai-band rv">
+        <div class="ai-grid">
+          <div class="ai-copy">
+            <div class="kicker">AI AGENT · 记账搭子</div>
+            <h2>记账,像发消息一样自然</h2>
+            <p>「记一笔午饭 35 元,支付宝」「这个月餐饮花了多少」——发给 AI 就好。它帮你记好每一笔、分好每个信封,查账复盘也是一句话的事。</p>
+            <p><b>放心交出去</b>:AI 动你的账本之前一定先问你,点一下确认才算数。</p>
+          </div>
+          <div class="chat-card">
+            <div class="chat-top"><i class="c1"></i><i class="c2"></i><i class="c3"></i><span>AI 助手 · 小文预算</span></div>
+            <div class="chat-body">
+              <div class="bubble user">记一笔午饭 35 元,支付宝,餐饮分类</div>
+              <div class="bubble ai">
+                好的,帮你整理成一笔支出:
+                <span class="entry"><i>餐饮美食</i><span class="e-r"><b>¥35.00</b><u>支付宝 · 11 月 14 日</u></span></span>
+              </div>
+              <div class="confirm">
+                <div class="t">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.73 18l-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><path d="M12 9v4M12 17h.01"/></svg>
+                  AI 想帮你写进账本
+                </div>
+                <p>确认后这笔才真正记上;反悔点「取消」就行。</p>
+                <div class="acts"><button>取消</button><button class="ok">确认记上</button></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 随时随地 ============ -->
+  <section id="anywhere">
+    <div class="wrap">
+      <div class="any-grid">
+        <div class="ai-copy rv">
+          <div class="kicker">ANYTIME · ANYWHERE</div>
+          <h2>出门在外,一条消息的事</h2>
+          <p>不用打开电脑,也不用专门开 App。微信、飞书里直接发消息:记一笔、查余额、看看这个月还剩多少——<b>几秒钟,顺手就记了</b>。</p>
+          <p>账记得越顺手,坚持得越久。<b>「随手能记」是记账能不能坚持下来的关键</b>——小文预算把入口搬到了你最常用的聊天窗口里。</p>
+        </div>
+        <div class="phone rv rv-d1">
+          <div class="phone-top">
+            <span class="avatar"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="13" rx="3"/><path d="M16 12.5h.01"/></svg></span>
+            <b>小文预算</b><span>在线</span>
+          </div>
+          <div class="phone-body">
+            <div class="bubble user">午饭 35 支付宝</div>
+            <div class="bubble ai">已记好:餐饮 -¥35.00,本月餐饮信封还剩 ¥343.60 🍚</div>
+            <div class="bubble user">这个月餐饮花了多少?</div>
+            <div class="bubble ai">¥856.40,预算用了 71%。节奏很稳,继续加油 💪</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 四法则 ============ -->
+  <section id="philosophy">
+    <div class="wrap">
+      <div class="sec-head rv">
+        <div class="kicker">THE METHOD</div>
+        <h2>信封记账法,这样做才有效</h2>
+        <p>先分钱,再花钱。把预算变成看得见的信封,而不是月底账单后的懊悔。</p>
+      </div>
+      <div class="rules">
+        <div class="rule rv">
+          <h3>给每一块钱一个任务</h3>
+          <p>收入到账先分配,直到每一块都有去处。花钱时心里有数,不再纠结。</p>
+        </div>
+        <div class="rule rv rv-d1">
+          <h3>拥抱真实支出</h3>
+          <p>房租、保险、旅行——大额开销提前按月攒进信封,账单来时从容不迫。</p>
+        </div>
+        <div class="rule rv rv-d2">
+          <h3>灵活调整</h3>
+          <p>计划赶不上变化?把预算挪个位置就好。预算跟着生活走,不苛责自己。</p>
+        </div>
+        <div class="rule rv rv-d3">
+          <h3>关注资金账龄</h3>
+          <p>钱在你手里待得越久,财务越从容——账龄,就是你自己的「松弛感」指标。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 快速开始 ============ -->
+  <section id="start">
+    <div class="wrap">
+      <div class="sec-head rv">
+        <div class="kicker">GET STARTED</div>
+        <h2>两分钟,跑起来</h2>
+        <p>开源免费,数据从头到尾都落在你自己的机器上——一台电脑就够了。</p>
+      </div>
+      <div class="start-grid">
+        <div class="term rv">
+          <div class="term-top"><i class="c1"></i><i class="c2"></i><i class="c3"></i><span>源码运行</span></div>
+          <pre><span class="cm"># 克隆并安装</span>
+<span class="pr">$</span> git clone https://github.com/iamshaynez/xiaowen-ynab
+<span class="pr">$</span> <span class="ar">cd</span> xiaowen-ynab && npm install
+
+<span class="cm"># 启动,打开浏览器就能开始记账</span>
+<span class="pr">$</span> npm run dev</pre>
+        </div>
+        <div class="term rv rv-d1">
+          <div class="term-top"><i class="c1"></i><i class="c2"></i><i class="c3"></i><span>Docker</span></div>
+          <pre><span class="cm"># 一键启动,数据落在自己机器上</span>
+<span class="pr">$</span> docker compose up -d
+
+<span class="cm"># 每天,账本会自动备份</span>
+<span class="cm"># 你只管记账,其他交给它</span></pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CTA ============ -->
+  <div class="final">
+    <div class="wrap">
+      <h2 class="rv">钱的事,从<span class="grad">今天这笔</span>开始理清。</h2>
+      <p class="rv rv-d1">MIT 开源,无需注册,没有订阅。克隆下来,它就是你的。</p>
+      <div class="hero-cta rv rv-d2">
+        <a class="btn btn-primary" href="https://github.com/iamshaynez/xiaowen-ynab" target="_blank" rel="noreferrer">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.55 0-.27-.01-1.17-.02-2.12-3.2.7-3.87-1.36-3.87-1.36-.52-1.33-1.28-1.68-1.28-1.68-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.03 1.76 2.69 1.25 3.35.96.1-.75.4-1.25.72-1.54-2.55-.29-5.23-1.28-5.23-5.68 0-1.26.45-2.28 1.18-3.09-.12-.29-.51-1.46.11-3.05 0 0 .96-.31 3.16 1.18a11 11 0 0 1 5.76 0c2.19-1.49 3.15-1.18 3.15-1.18.63 1.59.24 2.76.12 3.05.74.81 1.18 1.83 1.18 3.09 0 4.41-2.69 5.38-5.25 5.67.41.35.78 1.05.78 2.12 0 1.53-.01 2.76-.01 3.14 0 .3.2.66.8.55A11.51 11.51 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5z"/></svg>
+          GitHub · iamshaynez/xiaowen-ynab
+        </a>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="foot">
+      <a class="brand" href="#">
+        <img src="/favicon.svg" alt="logo" />
+        <span>小文预算 <span class="en">XIAOWEN BUDGET</span></span>
+      </a>
+      <div class="foot-links">
+        <a href="https://github.com/iamshaynez/xiaowen-ynab" target="_blank" rel="noreferrer">GitHub</a>
+        <a href="https://github.com/iamshaynez/xiaowen-ynab/issues" target="_blank" rel="noreferrer">Issues</a>
+        <a href="https://github.com/iamshaynez/xiaowen-ynab/blob/main/LICENSE" target="_blank" rel="noreferrer">MIT License</a>
+        <a href="#" id="toApp">打开应用</a>
+      </div>
+      <div class="foot-note">
+        本页面为纯静态单文件,<b>无任何第三方脚本与追踪</b>——与主应用的本地优先原则一致。© <span id="yr">2026</span> iamshaynez
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script>
+  // 导航滚动态
+  var nav = document.getElementById("nav");
+  var onScroll = function () { nav.classList.toggle("scrolled", window.scrollY > 24); };
+  window.addEventListener("scroll", onScroll, { passive: true });
+  onScroll();
+
+  // 滚动入场:首屏元素同步点亮(不依赖 IO 首轮回调时机),其余交给 IO
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) {
+      if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); }
+    });
+  }, { threshold: 0.12, rootMargin: "0px 0px -6% 0px" });
+  document.querySelectorAll(".rv").forEach(function (el) {
+    if (el.getBoundingClientRect().top < window.innerHeight) el.classList.add("in");
+    else io.observe(el);
+  });
+
+  // 页脚「打开应用」→ 站点根
+  document.getElementById("toApp").setAttribute("href", "/");
+
+  document.getElementById("yr").textContent = new Date().getFullYear();
+</script>
+</body>
+</html>
