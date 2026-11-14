@@ -28,6 +28,8 @@ jobs:
         with:
           context: .
           push: true
+          # 个人版 ACR 不收 buildx attestation(vnd.oci.empty)——新版 buildx 必触发,必须关(gb-pmo 同配置)
+          provenance: false
           tags: |
             ${{ secrets.ACR_REGISTRY }}/xiaowenz/money:${{ github.sha }}
             ${{ secrets.ACR_REGISTRY }}/xiaowenz/money:main
